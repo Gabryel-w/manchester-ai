@@ -646,3 +646,8 @@ A classificação considera os sinais vitais informados (frequência cardíaca, 
 ---
 
 
+## 15. Imagens
+<img width="1898" height="913" alt="image" src="https://github.com/user-attachments/assets/dc708f6d-6106-4f19-9e20-b8b1325dd2ae" />
+<img width="1916" height="916" alt="image" src="https://github.com/user-attachments/assets/36fcccc9-c52e-46a2-90d0-a6049c4f617b" />
+<img width="493" height="461" alt="image" src="https://github.com/user-attachments/assets/e777a753-638c-413d-9d27-65dc10959a4b" />
+<img width="482" height="800" alt="image" src="https://github.com/user-attachments/assets/12013244-3f7e-42b9-b529-7cbeeef3e6a1" />
