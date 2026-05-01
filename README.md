@@ -362,6 +362,7 @@ Para parar o servidor: `Ctrl + C` no terminal.
 2. **Escolha o backend** no canto superior direito (botão "Groq · modelo"). Você pode trocar entre Groq (cloud) e Ollama (local) e selecionar o modelo desejado.
 3. **Carregue um caso demo** clicando em um dos chips no topo da página (*Tosse leve*, *Cefaleia + HAS* ou *Dor torácica*) para preencher o formulário com um cenário típico.
 4. **Preencha os dados do paciente**: nome (opcional), idade, sexo, sinais vitais (PA, FC, SpO₂, temperatura) e a descrição livre dos sintomas. O campo de histórico clínico é opcional.
+   - **Ditado por voz**: clique no ícone de microfone dentro do campo "Queixa principal e sintomas" para ditar em vez de digitar (pt-BR). Usa a Web Speech API nativa do navegador — não envia áudio para a API e não consome tokens. Funciona em Chrome, Edge e Safari (Firefox ainda não tem suporte nativo).
 5. Clique em **Realizar triagem**.
 6. O resultado aparece à direita com:
    - **Cor do Manchester** (vermelho, laranja, amarelo, verde, azul) e tempo máximo de espera

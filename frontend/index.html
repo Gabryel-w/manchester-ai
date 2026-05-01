@@ -347,11 +347,24 @@
             <div>
               <label class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5" for="sintomas">
                 <span>Queixa principal e sintomas <span class="text-red-500">*</span></span>
-                <span class="text-[10px] font-medium text-slate-400 normal-case" id="sintomas-counter">0 caracteres</span>
+                <div class="flex items-center gap-2">
+                  <span id="dictation-status" class="hidden items-center gap-1 text-[10px] font-semibold text-rose-600 normal-case">
+                    <span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    <span>Ouvindo…</span>
+                  </span>
+                  <span class="text-[10px] font-medium text-slate-400 normal-case" id="sintomas-counter">0 caracteres</span>
+                </div>
               </label>
-              <textarea id="sintomas" name="sintomas" rows="6" required
-                placeholder="Ex.: Paciente refere dor de cabeça intensa há 6 horas, com náusea associada. Nega febre, vômitos ou alterações visuais."
-                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[120px]"></textarea>
+              <div class="relative">
+                <textarea id="sintomas" name="sintomas" rows="6" required
+                  placeholder="Ex.: Paciente refere dor de cabeça intensa há 6 horas, com náusea associada. Nega febre, vômitos ou alterações visuais."
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 pr-14 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[120px]"></textarea>
+                <button type="button" id="dictation-btn" title="Ditar sintomas (clique para falar)"
+                  class="absolute top-2.5 right-2.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-soft transition-all hover:border-brand-500 hover:text-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                  <i data-lucide="mic" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <p id="dictation-help" class="hidden mt-1.5 text-[10px] text-slate-400">Ditando em pt-BR. Clique no microfone novamente para parar. Você pode editar o texto livremente depois.</p>
             </div>
 
             <div>
@@ -1156,6 +1169,115 @@
     }
   }
 
+  // -------------------------------------------------------------------------
+  // DITADO POR VOZ (Web Speech API — 100% no navegador, zero token, zero custo)
+  // -------------------------------------------------------------------------
+  // Usa SpeechRecognition nativa do browser (Chrome/Edge/Safari). Firefox
+  // não tem suporte nativo — nesse caso o botão fica desabilitado com tooltip.
+  // O áudio NÃO sai do equipamento se o browser usa engine local; em Chrome,
+  // o áudio é processado pelos servidores do Google sem custo para o sistema.
+  let recognition = null;
+  let isDictating = false;
+  let dictationBaseText = '';   // texto da textarea no momento em que o ditado começou
+  let dictationFinalAccum = ''; // soma dos resultados finais desta sessão de ditado
+
+  function setupDictation() {
+    const btn = $('#dictation-btn');
+    const status = $('#dictation-status');
+    const help = $('#dictation-help');
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      btn.disabled = true;
+      btn.title = 'Seu navegador não suporta ditado por voz. Use Chrome, Edge ou Safari.';
+      btn.classList.add('opacity-40', 'cursor-not-allowed');
+      return;
+    }
+
+    recognition = new SR();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;       // mantém ouvindo até o usuário parar
+    recognition.interimResults = true;   // mostra texto provisório enquanto fala
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      // Percorre só os resultados novos desta sessão (a partir de resultIndex)
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          dictationFinalAccum += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      // Reescreve a textarea: texto-base + acumulado final + provisório atual.
+      // O usuário pode editar o resto à vontade enquanto fala — só a parte do
+      // ditado é gerenciada por aqui.
+      const sep = dictationBaseText && !dictationBaseText.endsWith(' ') ? ' ' : '';
+      $('#sintomas').value = dictationBaseText + sep + dictationFinalAccum + interim;
+      updateCounter();
+    };
+
+    recognition.onerror = (event) => {
+      const map = {
+        'no-speech': 'Não detectei fala. Tente novamente.',
+        'audio-capture': 'Microfone não encontrado.',
+        'not-allowed': 'Permissão de microfone negada. Habilite nas configurações do navegador.',
+        'network': 'Falha de rede no serviço de transcrição.',
+      };
+      help.textContent = map[event.error] || `Erro de ditado: ${event.error}`;
+      help.classList.remove('hidden', 'text-slate-400');
+      help.classList.add('text-rose-600');
+      stopDictation();
+    };
+
+    recognition.onend = () => {
+      // Pode terminar sozinha (timeout) ou pelo botão. Sincroniza UI sempre.
+      if (isDictating) stopDictation();
+    };
+
+    btn.addEventListener('click', () => {
+      if (isDictating) stopDictation();
+      else startDictation();
+    });
+  }
+
+  function startDictation() {
+    if (!recognition || isDictating) return;
+    const sintomas = $('#sintomas');
+    dictationBaseText = sintomas.value;
+    dictationFinalAccum = '';
+    try {
+      recognition.start();
+    } catch (e) {
+      // Chamar start() em estado inválido lança InvalidStateError
+      console.warn('Falha ao iniciar ditado:', e);
+      return;
+    }
+    isDictating = true;
+    const btn = $('#dictation-btn');
+    btn.classList.add('!border-rose-500', '!text-rose-600', '!bg-rose-50');
+    btn.querySelector('i').setAttribute('data-lucide', 'mic-off');
+    $('#dictation-status').classList.remove('hidden');
+    $('#dictation-status').classList.add('inline-flex');
+    $('#dictation-help').classList.remove('hidden', 'text-rose-600');
+    $('#dictation-help').classList.add('text-slate-400');
+    $('#dictation-help').textContent = 'Ditando em pt-BR. Clique no microfone novamente para parar. Você pode editar o texto livremente depois.';
+    lucide.createIcons();
+  }
+
+  function stopDictation() {
+    if (!recognition) return;
+    try { recognition.stop(); } catch {}
+    isDictating = false;
+    const btn = $('#dictation-btn');
+    btn.classList.remove('!border-rose-500', '!text-rose-600', '!bg-rose-50');
+    btn.querySelector('i').setAttribute('data-lucide', 'mic');
+    $('#dictation-status').classList.add('hidden');
+    $('#dictation-status').classList.remove('inline-flex');
+    lucide.createIcons();
+  }
+
   async function init() {
     lucide.createIcons();
     loadPrefs();
@@ -1168,6 +1290,8 @@
     if (enfermeiroSalvo) $('#enfermeiro').value = enfermeiroSalvo;
 
     $('#sintomas').addEventListener('input', updateCounter);
+
+    setupDictation();
 
     document.querySelectorAll('[data-case]').forEach((b) => {
       b.addEventListener('click', () => applyCase(b.dataset.case));
