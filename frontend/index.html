@@ -108,6 +108,21 @@
       </div>
 
       <div class="flex items-center gap-2.5">
+        <!-- View tabs -->
+        <div id="view-tabs" class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-soft">
+          <button data-view="triagem" type="button"
+            class="view-tab inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+            <i data-lucide="stethoscope" class="w-3.5 h-3.5"></i>
+            <span>Triagem</span>
+          </button>
+          <button data-view="fila" type="button"
+            class="view-tab inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
+            <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
+            <span>Fila</span>
+            <span id="fila-badge" class="hidden inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">0</span>
+          </button>
+        </div>
+
         <!-- Status pill -->
         <div id="status-pill" class="hidden md:inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
           <span class="relative flex h-2 w-2">
@@ -195,23 +210,52 @@
   <!-- ============================================================ -->
   <!-- MAIN GRID                                                    -->
   <!-- ============================================================ -->
-  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
+  <main id="view-triagem" class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
 
     <!-- ====================== FORM COLUMN ====================== -->
     <form id="triagem-form" class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
 
       <div class="p-7 md:p-8 space-y-8">
 
-        <!-- IDENTIFICAÇÃO -->
+        <!-- PROFISSIONAL RESPONSÁVEL -->
+        <section class="rounded-xl bg-brand-50/40 border border-brand-100 p-4">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="h-9 w-9 rounded-lg bg-white border border-brand-100 flex items-center justify-center shrink-0">
+              <i data-lucide="badge-check" class="w-4 h-4 text-brand-600"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight text-slate-900">Profissional responsável</h2>
+              <p class="text-xs text-slate-500">Quem está conduzindo esta triagem</p>
+            </div>
+          </div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="enfermeiro">
+            Enfermeiro <span class="text-red-500">*</span>
+            <span class="text-slate-400 font-normal">(nome ou matrícula)</span>
+          </label>
+          <input id="enfermeiro" name="enfermeiro" type="text" required minlength="2" maxlength="80"
+            placeholder="Ex.: Ana Souza · COREN 123456"
+            class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+        </section>
+
+        <!-- IDENTIFICAÇÃO DO PACIENTE -->
         <section>
           <div class="flex items-center gap-3 mb-5">
             <div class="h-9 w-9 rounded-lg bg-brand-50 border border-brand-100 flex items-center justify-center">
               <i data-lucide="user-round" class="w-4 h-4 text-brand-600"></i>
             </div>
             <div>
-              <h2 class="text-sm font-bold tracking-tight text-slate-900">Identificação</h2>
-              <p class="text-xs text-slate-500">Dados básicos do paciente</p>
+              <h2 class="text-sm font-bold tracking-tight text-slate-900">Paciente</h2>
+              <p class="text-xs text-slate-500">Dados de identificação</p>
             </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="paciente_nome">
+              Nome do paciente <span class="text-slate-400 font-normal">(opcional)</span>
+            </label>
+            <input id="paciente_nome" name="paciente_nome" type="text" maxlength="120"
+              placeholder="Ex.: João da Silva"
+              class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -399,6 +443,20 @@
             </div>
           </div>
 
+          <!-- Inconsistency banner (rule-based override) -->
+          <div id="inconsistency-banner" class="hidden mx-6 mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+            <div class="flex items-start gap-3">
+              <div class="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-amber-700"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-xs font-bold text-amber-900 uppercase tracking-wider">Classificação ajustada por regras determinísticas</h4>
+                <p id="inconsistency-summary" class="text-xs text-amber-900 mt-1 leading-relaxed"></p>
+                <ul id="inconsistency-reasons" class="mt-2 space-y-1"></ul>
+              </div>
+            </div>
+          </div>
+
           <!-- Justification + alerts -->
           <div class="p-6 space-y-5 reveal">
             <div>
@@ -459,6 +517,39 @@
   </main>
 
   <!-- ============================================================ -->
+  <!-- FILA VIVA                                                    -->
+  <!-- ============================================================ -->
+  <section id="view-fila" class="hidden max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
+    <div class="flex items-center justify-between mb-6 gap-4">
+      <div>
+        <h2 class="text-2xl font-bold tracking-tight text-slate-900">Fila de atendimento</h2>
+        <p class="text-sm text-slate-600 mt-1">
+          Pacientes ordenados por gravidade Manchester. Cronômetro mostra o tempo restante até estourar a janela do protocolo.
+        </p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
+          <input id="fila-include-finalizados" type="checkbox" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500/30" />
+          Incluir finalizados
+        </label>
+        <button id="fila-refresh" type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-soft hover:bg-slate-50 hover:border-slate-300 transition-colors">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          <span>Atualizar</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="fila-empty" class="hidden rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+      <i data-lucide="inbox" class="w-8 h-8 text-slate-300 mx-auto mb-3"></i>
+      <h3 class="text-sm font-bold text-slate-900">Fila vazia</h3>
+      <p class="text-xs text-slate-500 mt-1">Nenhum paciente aguardando no momento.</p>
+    </div>
+
+    <div id="fila-list" class="space-y-3"></div>
+  </section>
+
+  <!-- ============================================================ -->
   <!-- FOOTER                                                       -->
   <!-- ============================================================ -->
   <footer class="border-t border-slate-200 bg-white">
@@ -499,8 +590,9 @@
     cores: {},
   };
 
-  const HISTORY_KEY = 'triagem_history_v1';
-  const PREF_KEY    = 'triagem_pref_v1';
+  const HISTORY_KEY    = 'triagem_history_v1';
+  const PREF_KEY       = 'triagem_pref_v1';
+  const ENFERMEIRO_KEY = 'triagem_enfermeiro_v1';
   const $ = (sel) => document.querySelector(sel);
 
   function loadPrefs() {
@@ -651,6 +743,27 @@
     $('#result-backend').textContent     = data.backend_usado || '';
     $('#result-justification').textContent = data.justificativa || '';
 
+    // Banner de inconsistência (rule-based override)
+    const incBanner  = $('#inconsistency-banner');
+    const incSummary = $('#inconsistency-summary');
+    const incReasons = $('#inconsistency-reasons');
+    incReasons.innerHTML = '';
+    if (data.inconsistencia && data.cor_regra) {
+      const llmCor = data.classificacao_llm || 'avaliação do modelo';
+      incSummary.textContent =
+        `O modelo classificou como ${llmCor}, mas regras determinísticas elevaram para ` +
+        `${data.cor_regra} com base nos sinais vitais informados:`;
+      (data.motivos_regra || []).forEach((m) => {
+        const li = document.createElement('li');
+        li.className = 'text-xs text-amber-900 flex items-start gap-1.5';
+        li.innerHTML = `<i data-lucide="dot" class="w-3 h-3 mt-0.5 text-amber-700 shrink-0"></i><span>${escapeHtml(m)}</span>`;
+        incReasons.appendChild(li);
+      });
+      incBanner.classList.remove('hidden');
+    } else {
+      incBanner.classList.add('hidden');
+    }
+
     const alertsBox = $('#alerts-section'), alertsList = $('#alerts-list');
     alertsList.innerHTML = '';
     if (data.sinais_alerta && data.sinais_alerta.length) {
@@ -753,13 +866,18 @@
   async function handleSubmit(e) {
     e.preventDefault();
     const sintomas = $('#sintomas').value.trim();
+    const enfermeiro = $('#enfermeiro').value.trim();
     if (!sintomas) { $('#sintomas').focus(); return; }
+    if (!enfermeiro) { $('#enfermeiro').focus(); return; }
     if (!state.modelo) {
       $('#error-detail').textContent = 'Nenhum modelo selecionado. Abra o menu no canto superior direito e escolha um.';
       showState('error'); return;
     }
 
+    localStorage.setItem(ENFERMEIRO_KEY, enfermeiro);
+
     const payload = {
+      paciente_nome: $('#paciente_nome').value.trim(),
       idade: parseInt($('#idade').value, 10),
       sexo: $('#sexo').value,
       pressao: $('#pressao').value,
@@ -770,6 +888,7 @@
       historico: $('#historico').value.trim(),
       backend: state.backend,
       modelo: state.modelo,
+      enfermeiro,
     };
 
     setLoading(true, state.modelo);
@@ -777,6 +896,8 @@
       const data = await postTriagem(payload);
       renderResult(data);
       pushHistory(payload, data);
+      // Atualiza o badge da fila (uma nova triagem foi adicionada).
+      refreshFilaBadge();
     } catch (err) {
       $('#error-detail').textContent = err.message || String(err);
       showState('error');
@@ -790,12 +911,261 @@
     if (el) el.textContent = `${$('#sintomas').value.length} caracteres`;
   }
 
+  // -------------------------------------------------------------------------
+  // FILA VIVA
+  // -------------------------------------------------------------------------
+  let filaTimer = null;        // setInterval que atualiza os cronômetros (1s)
+  let filaState = [];          // última fila carregada
+  let currentView = 'triagem'; // 'triagem' | 'fila'
+
+  function setActiveTab(view) {
+    currentView = view;
+    document.querySelectorAll('.view-tab').forEach((b) => {
+      const active = b.dataset.view === view;
+      b.classList.toggle('bg-brand-50', active);
+      b.classList.toggle('text-brand-700', active);
+      b.classList.toggle('text-slate-500', !active && b.dataset.view === 'fila');
+      b.classList.toggle('text-slate-700', !active && b.dataset.view === 'triagem');
+    });
+    $('#view-triagem').classList.toggle('hidden', view !== 'triagem');
+    $('#view-fila').classList.toggle('hidden', view !== 'fila');
+    if (view === 'fila') {
+      loadFila();
+    }
+  }
+
+  async function fetchFila(incluirFinalizados = false) {
+    const url = '/api/fila' + (incluirFinalizados ? '?incluir_finalizados=true' : '');
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Falha ao buscar fila');
+    return r.json();
+  }
+
+  async function patchFila(id, status) {
+    const r = await fetch(`/api/fila/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `Erro HTTP ${r.status}`);
+    return data;
+  }
+
+  async function loadFila() {
+    const incluir = $('#fila-include-finalizados').checked;
+    try {
+      filaState = await fetchFila(incluir);
+      renderFila();
+    } catch (err) {
+      $('#fila-list').innerHTML =
+        `<div class="rounded-lg bg-red-50 border border-red-100 p-4 text-sm text-red-700">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function formatRelativeTime(criadoEmISO) {
+    const t = new Date(criadoEmISO).getTime();
+    if (!Number.isFinite(t)) return '—';
+    const diff = Math.floor((Date.now() - t) / 1000);
+    if (diff < 60) return `${diff}s atrás`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m atrás`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h atrás`;
+    return `${Math.floor(diff / 86400)}d atrás`;
+  }
+
+  function renderFila() {
+    const wrap = $('#fila-list');
+    const empty = $('#fila-empty');
+    wrap.innerHTML = '';
+
+    if (!filaState.length) {
+      empty.classList.remove('hidden');
+      lucide.createIcons();
+      return;
+    }
+    empty.classList.add('hidden');
+
+    filaState.forEach((item) => {
+      const cor = item.cor_info || {};
+      const isFinalizado = item.status !== 'aguardando';
+      const statusBadge = {
+        aguardando: '<span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Aguardando</span>',
+        atendido:   '<span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Atendido</span>',
+        dispensado: '<span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Dispensado</span>',
+      }[item.status] || '';
+
+      const incTag = item.inconsistencia
+        ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+             <i data-lucide="shield-alert" class="w-3 h-3"></i> Trava
+           </span>`
+        : '';
+
+      const acoes = isFinalizado ? '' : `
+        <div class="flex flex-wrap gap-2">
+          <button data-action="atendido" data-id="${item.id}"
+            class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-emerald-700 transition-colors">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i> Marcar atendido
+          </button>
+          <button data-action="dispensado" data-id="${item.id}"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 transition-colors">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i> Dispensar
+          </button>
+        </div>
+      `;
+
+      const card = document.createElement('article');
+      card.className = 'rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden';
+      card.innerHTML = `
+        <div class="flex">
+          <div class="w-2 shrink-0" style="background-color: ${cor.hex_fundo || '#94a3b8'};"></div>
+          <div class="flex-1 p-5">
+            <div class="flex items-start justify-between gap-4 flex-wrap">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="h-10 w-10 rounded-lg flex items-center justify-center text-base font-bold shrink-0 shadow-soft"
+                      style="background-color: ${cor.hex_fundo || '#94a3b8'}; color: ${cor.hex_texto || '#fff'};">
+                  ${cor.icone || ''}
+                </span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-bold text-slate-900">${escapeHtml(item.paciente_nome || ('Paciente #' + item.id))}</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${escapeHtml(item.classificacao || '—')}</span>
+                    ${statusBadge}
+                    ${incTag}
+                  </div>
+                  <div class="text-[11px] text-slate-500 font-medium mt-0.5">
+                    ${escapeHtml(String(item.idade ?? '?'))}a · ${escapeHtml(item.sexo || '—')} · #${item.id}
+                    · <span title="${escapeHtml(item.criado_em)}">${escapeHtml(formatRelativeTime(item.criado_em))}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tempo restante</div>
+                <div class="timer text-base font-bold tabular-nums" data-criado="${item.criado_em}" data-tempo-max="${item.tempo_max_min}" data-status="${item.status}">—</div>
+              </div>
+            </div>
+
+            <p class="text-sm text-slate-700 mt-3 leading-relaxed">
+              <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Sintomas</span>
+              ${escapeHtml((item.sintomas || '').slice(0, 240))}${(item.sintomas || '').length > 240 ? '…' : ''}
+            </p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-[11px]">
+              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
+                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">PA</div>
+                <div class="font-medium text-slate-700">${escapeHtml(item.pressao || '—')}</div>
+              </div>
+              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
+                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">FC</div>
+                <div class="font-medium text-slate-700">${item.frequencia_cardiaca ?? '—'} bpm</div>
+              </div>
+              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
+                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">SpO₂</div>
+                <div class="font-medium text-slate-700">${item.spo2 ?? '—'}%</div>
+              </div>
+              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
+                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">Temp</div>
+                <div class="font-medium text-slate-700">${item.temperatura ?? '—'} °C</div>
+              </div>
+            </div>
+
+            <div class="mt-3 text-[11px] text-slate-500">
+              <span class="font-semibold text-slate-600">Enfermeiro:</span> ${escapeHtml(item.enfermeiro || '—')}
+            </div>
+
+            ${item.justificativa ? `
+              <details class="mt-3 group">
+                <summary class="cursor-pointer text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand-600 transition-colors flex items-center gap-1">
+                  <i data-lucide="brain-circuit" class="w-3 h-3"></i> Ver justificativa
+                </summary>
+                <p class="mt-2 text-sm text-slate-700 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg p-3">
+                  ${escapeHtml(item.justificativa)}
+                </p>
+              </details>` : ''}
+
+            ${acoes ? `<div class="mt-4">${acoes}</div>` : ''}
+          </div>
+        </div>
+      `;
+      wrap.appendChild(card);
+    });
+
+    // Botões de ação
+    wrap.querySelectorAll('button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = parseInt(btn.dataset.id, 10);
+        const action = btn.dataset.action;
+        btn.disabled = true;
+        try {
+          await patchFila(id, action);
+          await loadFila();
+          refreshFilaBadge();
+        } catch (err) {
+          alert(err.message || String(err));
+          btn.disabled = false;
+        }
+      });
+    });
+
+    lucide.createIcons();
+    updateTimers();
+  }
+
+  function updateTimers() {
+    document.querySelectorAll('.timer').forEach((el) => {
+      const status = el.dataset.status;
+      if (status !== 'aguardando') {
+        el.textContent = '—';
+        el.className = 'timer text-base font-bold tabular-nums text-slate-400';
+        return;
+      }
+      const criado = new Date(el.dataset.criado).getTime();
+      const tempoMax = parseInt(el.dataset.tempoMax, 10);
+      if (!Number.isFinite(criado) || !Number.isFinite(tempoMax)) {
+        el.textContent = '—';
+        return;
+      }
+      const decorridoSeg = Math.floor((Date.now() - criado) / 1000);
+      const restanteSeg = tempoMax * 60 - decorridoSeg;
+
+      if (restanteSeg <= 0) {
+        const atrasoMin = Math.ceil(-restanteSeg / 60);
+        el.textContent = `+${atrasoMin}m atrasado`;
+        el.className = 'timer text-base font-bold tabular-nums text-red-600 animate-pulse';
+      } else {
+        const m = Math.floor(restanteSeg / 60);
+        const s = restanteSeg % 60;
+        el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        const tight = restanteSeg < 60;
+        el.className = `timer text-base font-bold tabular-nums ${tight ? 'text-amber-600' : 'text-slate-700'}`;
+      }
+    });
+  }
+
+  async function refreshFilaBadge() {
+    try {
+      const data = await fetchFila(false);
+      const badge = $('#fila-badge');
+      if (data.length > 0) {
+        badge.classList.remove('hidden');
+        badge.textContent = data.length;
+      } else {
+        badge.classList.add('hidden');
+      }
+    } catch {
+      // Silencioso — badge é cosmético.
+    }
+  }
+
   async function init() {
     lucide.createIcons();
     loadPrefs();
     setupBackendMenu();
     renderHistory();
     updateCounter();
+
+    // Restaura nome do enfermeiro persistido entre sessões.
+    const enfermeiroSalvo = localStorage.getItem(ENFERMEIRO_KEY);
+    if (enfermeiroSalvo) $('#enfermeiro').value = enfermeiroSalvo;
 
     $('#sintomas').addEventListener('input', updateCounter);
 
@@ -810,12 +1180,25 @@
 
     $('#triagem-form').addEventListener('submit', handleSubmit);
 
+    // Tabs + fila
+    document.querySelectorAll('.view-tab').forEach((b) => {
+      b.addEventListener('click', () => setActiveTab(b.dataset.view));
+    });
+    $('#fila-refresh').addEventListener('click', loadFila);
+    $('#fila-include-finalizados').addEventListener('change', loadFila);
+    setActiveTab('triagem');
+
+    // Cronômetros: tick a cada segundo enquanto a aba Fila estiver aberta
+    // (atualizar sempre é barato; a render só acontece em renderFila).
+    filaTimer = setInterval(updateTimers, 1000);
+
     try {
       const m = await fetchModels();
       state.modelos = { Groq: m.groq || [], Ollama: m.ollama || [] };
       state.cores = m.cores || {};
       renderModelSelect();
       setStatus(true, 'API conectada');
+      refreshFilaBadge();
     } catch (err) {
       setStatus(false, 'API offline');
       $('#error-detail').textContent =

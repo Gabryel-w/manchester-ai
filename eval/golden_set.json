@@ -1,0 +1,396 @@
+[
+  {
+    "id": "verm_01",
+    "descricao_curta": "IAM com instabilidade hemodinâmica",
+    "esperado": "VERMELHO",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 62, "sexo": "Masculino",
+      "pressao": "80/50", "frequencia_cardiaca": 130,
+      "spo2": 88, "temperatura": 36.4,
+      "sintomas": "Dor torácica intensa há 30 min, irradiando para braço esquerdo, sudorese fria profusa, náuseas, palidez. Refere falta de ar.",
+      "historico": "HAS, DM2, tabagista 30 maços/ano. Pai faleceu de IAM aos 58."
+    }
+  },
+  {
+    "id": "verm_02",
+    "descricao_curta": "Choque séptico",
+    "esperado": "VERMELHO",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 78, "sexo": "Feminino",
+      "pressao": "75/40", "frequencia_cardiaca": 135,
+      "spo2": 86, "temperatura": 39.8,
+      "sintomas": "Confusão mental, extremidades frias, oligúria há 12h. Familiares relatam piora progressiva nas últimas 24h.",
+      "historico": "ITU recorrente, DM2 descompensado."
+    }
+  },
+  {
+    "id": "verm_03",
+    "descricao_curta": "AVC isquêmico em fase aguda",
+    "esperado": "VERMELHO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 70, "sexo": "Masculino",
+      "pressao": "180/100", "frequencia_cardiaca": 92,
+      "spo2": 95, "temperatura": 36.7,
+      "sintomas": "Hemiparesia direita súbita há 50 minutos, disartria importante, desvio de rima labial. Acompanhante refere início abrupto durante o almoço.",
+      "historico": "Fibrilação atrial sem anticoagulação adequada. HAS."
+    }
+  },
+  {
+    "id": "verm_04",
+    "descricao_curta": "Hemorragia digestiva alta maciça",
+    "esperado": "VERMELHO",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 55, "sexo": "Masculino",
+      "pressao": "85/55", "frequencia_cardiaca": 128,
+      "spo2": 93, "temperatura": 36.0,
+      "sintomas": "Hematêmese volumosa há 2h, melena há 1 dia. Tontura intensa, sudorese, palidez acentuada. Quase desmaiou ao se levantar.",
+      "historico": "Cirrose por álcool, varizes esofágicas conhecidas."
+    }
+  },
+  {
+    "id": "verm_05",
+    "descricao_curta": "Anafilaxia com broncoespasmo",
+    "esperado": "VERMELHO",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 24, "sexo": "Feminino",
+      "pressao": "82/50", "frequencia_cardiaca": 138,
+      "spo2": 87, "temperatura": 36.6,
+      "sintomas": "Após ingerir camarão há 20 min: edema labial e periorbitário, urticária generalizada, dispneia importante com sibilos audíveis, sensação de fechamento da garganta.",
+      "historico": "Alergia conhecida a frutos do mar."
+    }
+  },
+  {
+    "id": "verm_06",
+    "descricao_curta": "Crise convulsiva persistente (status epilepticus)",
+    "esperado": "VERMELHO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 35, "sexo": "Masculino",
+      "pressao": "150/95", "frequencia_cardiaca": 118,
+      "spo2": 92, "temperatura": 37.1,
+      "sintomas": "Crise convulsiva tônico-clônica generalizada iniciada há 15 minutos sem recuperação da consciência entre os episódios. Trazido pelo SAMU.",
+      "historico": "Epilepsia mal controlada, abandono de medicação há 1 semana."
+    }
+  },
+
+  {
+    "id": "lara_01",
+    "descricao_curta": "Crise hipertensiva sintomática",
+    "esperado": "LARANJA",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 58, "sexo": "Feminino",
+      "pressao": "230/120", "frequencia_cardiaca": 96,
+      "spo2": 96, "temperatura": 36.5,
+      "sintomas": "Cefaleia intensa pulsátil há 3h, visão turva, náuseas. Nega déficit motor ou alteração da fala.",
+      "historico": "HAS em uso irregular de losartana e anlodipino."
+    }
+  },
+  {
+    "id": "lara_02",
+    "descricao_curta": "Asma grave sem hipoxemia franca",
+    "esperado": "LARANJA",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 32, "sexo": "Feminino",
+      "pressao": "130/85", "frequencia_cardiaca": 122,
+      "spo2": 93, "temperatura": 37.0,
+      "sintomas": "Dispneia progressiva há 6h, sibilância difusa, uso de musculatura acessória, fala entrecortada. Bombinha de salbutamol sem alívio.",
+      "historico": "Asmática, quatro internações no último ano."
+    }
+  },
+  {
+    "id": "lara_03",
+    "descricao_curta": "Dor torácica suspeita não infartada",
+    "esperado": "LARANJA",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 67, "sexo": "Masculino",
+      "pressao": "140/90", "frequencia_cardiaca": 95,
+      "spo2": 96, "temperatura": 36.8,
+      "sintomas": "Dor torácica em aperto há 1h, intensidade 7/10, com leve irradiação para mandíbula. Sem sudorese ou náusea no momento. Hemodinâmica estável.",
+      "historico": "Dislipidemia, ex-tabagista. Sem coronariopatia conhecida."
+    }
+  },
+  {
+    "id": "lara_04",
+    "descricao_curta": "Fratura exposta de tíbia",
+    "esperado": "LARANJA",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 28, "sexo": "Masculino",
+      "pressao": "135/85", "frequencia_cardiaca": 110,
+      "spo2": 98, "temperatura": 36.7,
+      "sintomas": "Queda de moto há 40 min com fratura exposta de tíbia direita, dor 9/10, deformidade visível, sangramento ativo controlado com compressão.",
+      "historico": "Sem comorbidades."
+    }
+  },
+  {
+    "id": "lara_05",
+    "descricao_curta": "Hipertermia severa",
+    "esperado": "LARANJA",
+    "trava_esperada": true,
+    "dados": {
+      "idade": 4, "sexo": "Masculino",
+      "pressao": "100/60", "frequencia_cardiaca": 140,
+      "spo2": 96, "temperatura": 40.2,
+      "sintomas": "Febre alta refratária a antitérmicos há 36h, prostração, recusa alimentar. Nega rigidez de nuca ou petéquias.",
+      "historico": "Sem comorbidades, esquema vacinal completo."
+    }
+  },
+  {
+    "id": "lara_06",
+    "descricao_curta": "Dor abdominal aguda intensa com sinais de peritonite",
+    "esperado": "LARANJA",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 50, "sexo": "Feminino",
+      "pressao": "125/80", "frequencia_cardiaca": 108,
+      "spo2": 97, "temperatura": 38.4,
+      "sintomas": "Dor abdominal difusa de início súbito há 4h, intensidade 9/10, abdome em tábua à palpação, peristalse ausente, vômitos biliosos.",
+      "historico": "Diverticulose conhecida."
+    }
+  },
+
+  {
+    "id": "amar_01",
+    "descricao_curta": "Cefaleia moderada com HAS leve",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 45, "sexo": "Feminino",
+      "pressao": "150/95", "frequencia_cardiaca": 88,
+      "spo2": 97, "temperatura": 36.8,
+      "sintomas": "Cefaleia pulsátil há 6h, intensidade 6/10, em região occipital. Náuseas leves. Nega vômitos, alteração visual ou déficit neurológico.",
+      "historico": "Hipertensa em uso irregular de losartana, histórico de enxaqueca."
+    }
+  },
+  {
+    "id": "amar_02",
+    "descricao_curta": "Vômitos persistentes com desidratação leve",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 30, "sexo": "Feminino",
+      "pressao": "110/70", "frequencia_cardiaca": 105,
+      "spo2": 98, "temperatura": 37.5,
+      "sintomas": "Náuseas e vômitos há 12h, mais de 10 episódios. Mucosa oral seca, refere tontura ao se levantar. Tolera pequenos goles d'água.",
+      "historico": "Sem comorbidades, suspeita de gastroenterite."
+    }
+  },
+  {
+    "id": "amar_03",
+    "descricao_curta": "Lombalgia aguda incapacitante",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 42, "sexo": "Masculino",
+      "pressao": "130/85", "frequencia_cardiaca": 92,
+      "spo2": 98, "temperatura": 36.6,
+      "sintomas": "Lombalgia aguda há 2 dias após esforço físico, dor 7/10, irradiação para perna direita. Sem perda de força ou alteração esfincteriana.",
+      "historico": "Episódios prévios de lombalgia."
+    }
+  },
+  {
+    "id": "amar_04",
+    "descricao_curta": "Pielonefrite sem instabilidade",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 35, "sexo": "Feminino",
+      "pressao": "120/75", "frequencia_cardiaca": 100,
+      "spo2": 98, "temperatura": 38.7,
+      "sintomas": "Febre há 24h, dor lombar direita, disúria e polaciúria há 3 dias. Nega calafrios intensos ou alteração da consciência.",
+      "historico": "ITU de repetição."
+    }
+  },
+  {
+    "id": "amar_05",
+    "descricao_curta": "Dor abdominal moderada compatível com cólica renal",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 40, "sexo": "Masculino",
+      "pressao": "140/85", "frequencia_cardiaca": 98,
+      "spo2": 98, "temperatura": 36.8,
+      "sintomas": "Dor lombar direita em cólica há 4h, intensidade 7/10, irradiando para flanco. Náuseas leves, sem febre. Hematúria observada.",
+      "historico": "Litíase renal prévia."
+    }
+  },
+  {
+    "id": "amar_06",
+    "descricao_curta": "Crise asmática moderada com boa resposta inicial",
+    "esperado": "AMARELO",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 22, "sexo": "Feminino",
+      "pressao": "120/75", "frequencia_cardiaca": 102,
+      "spo2": 95, "temperatura": 36.7,
+      "sintomas": "Dispneia leve a moderada há 3h após exposição a poeira, sibilância à ausculta, fala em frases completas. Bombinha trouxe alívio parcial.",
+      "historico": "Asma intermitente bem controlada."
+    }
+  },
+
+  {
+    "id": "verde_01",
+    "descricao_curta": "IVAS sem sinais de gravidade",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 28, "sexo": "Feminino",
+      "pressao": "115/75", "frequencia_cardiaca": 82,
+      "spo2": 98, "temperatura": 37.8,
+      "sintomas": "Coriza, dor de garganta leve, tosse seca há 3 dias. Cansaço moderado. Sem dispneia, sem dor torácica.",
+      "historico": "Sem comorbidades."
+    }
+  },
+  {
+    "id": "verde_02",
+    "descricao_curta": "Cefaleia tensional",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 36, "sexo": "Masculino",
+      "pressao": "125/80", "frequencia_cardiaca": 76,
+      "spo2": 99, "temperatura": 36.5,
+      "sintomas": "Dor em peso na região frontal há 1 dia, intensidade 3/10, melhora parcial com paracetamol. Refere estresse no trabalho.",
+      "historico": "Histórico de cefaleia tensional recorrente."
+    }
+  },
+  {
+    "id": "verde_03",
+    "descricao_curta": "Entorse de tornozelo recente",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 25, "sexo": "Feminino",
+      "pressao": "118/72", "frequencia_cardiaca": 80,
+      "spo2": 99, "temperatura": 36.6,
+      "sintomas": "Torção de tornozelo direito há 2h durante caminhada. Edema discreto, dor 4/10, consegue apoiar com desconforto.",
+      "historico": "Sem fraturas prévias no local."
+    }
+  },
+  {
+    "id": "verde_04",
+    "descricao_curta": "Diarreia aguda autolimitada",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 32, "sexo": "Masculino",
+      "pressao": "120/78", "frequencia_cardiaca": 84,
+      "spo2": 98, "temperatura": 37.2,
+      "sintomas": "Diarreia aquosa 4 episódios em 24h, leve cólica abdominal. Sem sangue ou muco. Hidratação oral mantida.",
+      "historico": "Refeição de rua na véspera."
+    }
+  },
+  {
+    "id": "verde_05",
+    "descricao_curta": "Conjuntivite leve",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 19, "sexo": "Feminino",
+      "pressao": "115/70", "frequencia_cardiaca": 78,
+      "spo2": 99, "temperatura": 36.5,
+      "sintomas": "Olho direito vermelho com secreção purulenta há 2 dias, sensação de areia. Sem alteração de acuidade visual.",
+      "historico": "Sem comorbidades."
+    }
+  },
+  {
+    "id": "verde_06",
+    "descricao_curta": "Lombalgia mecânica leve",
+    "esperado": "VERDE",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 38, "sexo": "Masculino",
+      "pressao": "125/82", "frequencia_cardiaca": 78,
+      "spo2": 98, "temperatura": 36.6,
+      "sintomas": "Lombalgia há 1 dia após levantar peso, dor 3/10 em repouso, piora com flexão. Sem irradiação ou perda de força.",
+      "historico": "Trabalho braçal."
+    }
+  },
+
+  {
+    "id": "azul_01",
+    "descricao_curta": "Renovação de receita médica",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 65, "sexo": "Feminino",
+      "pressao": "130/82", "frequencia_cardiaca": 74,
+      "spo2": 98, "temperatura": 36.4,
+      "sintomas": "Procura serviço para renovação de receita de losartana, sem queixas atuais. Refere se sentir bem.",
+      "historico": "HAS controlada."
+    }
+  },
+  {
+    "id": "azul_02",
+    "descricao_curta": "Resultado de exame para mostrar ao médico",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 50, "sexo": "Masculino",
+      "pressao": "125/80", "frequencia_cardiaca": 76,
+      "spo2": 98, "temperatura": 36.5,
+      "sintomas": "Veio mostrar resultado de exames laboratoriais agendados. Sem queixas clínicas.",
+      "historico": "Acompanhamento de rotina."
+    }
+  },
+  {
+    "id": "azul_03",
+    "descricao_curta": "Atestado para empresa",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 28, "sexo": "Masculino",
+      "pressao": "120/78", "frequencia_cardiaca": 72,
+      "spo2": 99, "temperatura": 36.4,
+      "sintomas": "Solicita atestado médico para apresentar em empresa por consulta odontológica realizada ontem. Nega sintomas.",
+      "historico": "Sem comorbidades."
+    }
+  },
+  {
+    "id": "azul_04",
+    "descricao_curta": "Curativo de pequena ferida limpa",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 42, "sexo": "Feminino",
+      "pressao": "118/76", "frequencia_cardiaca": 74,
+      "spo2": 99, "temperatura": 36.5,
+      "sintomas": "Pequeno corte superficial em dedo da mão há 2 dias, ferida limpa, vem para troca de curativo.",
+      "historico": "Sem comorbidades, vacinação antitetânica em dia."
+    }
+  },
+  {
+    "id": "azul_05",
+    "descricao_curta": "Verificação de pressão arterial de rotina",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 70, "sexo": "Masculino",
+      "pressao": "128/82", "frequencia_cardiaca": 70,
+      "spo2": 98, "temperatura": 36.5,
+      "sintomas": "Veio aferir pressão como combinado com a equipe da unidade. Nega sintomas.",
+      "historico": "HAS estável em uso de enalapril."
+    }
+  },
+  {
+    "id": "azul_06",
+    "descricao_curta": "Orientação sobre vacina",
+    "esperado": "AZUL",
+    "trava_esperada": false,
+    "dados": {
+      "idade": 33, "sexo": "Feminino",
+      "pressao": "115/72", "frequencia_cardiaca": 70,
+      "spo2": 99, "temperatura": 36.6,
+      "sintomas": "Procura unidade para se informar sobre vacina contra HPV, planejando viagem internacional. Sem queixas.",
+      "historico": "Sem comorbidades."
+    }
+  }
+]

@@ -17,15 +17,28 @@ Sistema de Apoio à Decisão (SAD) que utiliza um Large Language Model (LLM) par
 7. [Como executar](#7-como-executar)
 8. [Como usar](#8-como-usar)
 9. [Endpoints da API](#9-endpoints-da-api)
-10. [Resolução de problemas comuns](#10-resolução-de-problemas-comuns)
-11. [Protocolo de Manchester](#11-protocolo-de-manchester)
-12. [Limitações conhecidas](#12-limitações-conhecidas)
+10. [Travas determinísticas (rule-based override)](#10-travas-determinísticas-rule-based-override)
+11. [Fila viva](#11-fila-viva)
+12. [Avaliação com golden set](#12-avaliação-com-golden-set)
+13. [Resolução de problemas comuns](#13-resolução-de-problemas-comuns)
+14. [Protocolo de Manchester](#14-protocolo-de-manchester)
+15. [Limitações conhecidas](#15-limitações-conhecidas)
 
 ---
 
 ## 1. Visão geral
 
 O sistema permite que um enfermeiro descreva os sintomas e sinais vitais de um paciente em linguagem natural, e recebe em segundos uma classificação de risco (vermelho, laranja, amarelo, verde ou azul) acompanhada da justificativa clínica que motivou a decisão. O LLM atua na **zona cinzenta** entre os protocolos formais e a interpretação ambígua dos sintomas, tornando a decisão auditável e aceitável pelo gestor.
+
+### Camadas de segurança
+
+A decisão final **não depende exclusivamente do LLM**:
+
+1. **Camada do LLM**: gera classificação + justificativa em linguagem natural (XAI).
+2. **Travas determinísticas (rule-based override)**: sobrepõem o LLM quando sinais vitais objetivos cruzam limiares críticos (SpO₂ < 90, PA sistólica < 90, FC > 140, T > 39,5 °C, etc.). Se a trava elevar a cor, a interface mostra um banner de **inconsistência** explicando a divergência. As travas só sobem a gravidade — nunca rebaixam.
+3. **Fila viva persistida**: cada triagem é gravada em SQLite com identificação do enfermeiro e do paciente, status de atendimento e cronômetro do tempo máximo Manchester.
+
+### Backends de IA
 
 O backend de IA é **trocável em tempo de execução** entre dois provedores:
 
@@ -36,30 +49,36 @@ O backend de IA é **trocável em tempo de execução** entre dois provedores:
 
 ## 2. Arquitetura
 
-A aplicação é dividida em três camadas independentes que se comunicam por HTTP:
+A aplicação é dividida em camadas independentes que se comunicam por HTTP:
 
 ```mermaid
 flowchart LR
-    Browser["🌐 Navegador<br/><b>frontend/index.html</b><br/><i>Tailwind + Vanilla JS</i>"]
+    Browser["🌐 Navegador<br/><b>frontend/index.html</b><br/><i>Tailwind + Vanilla JS</i><br/>Triagem · Fila"]
     API["⚙️ Servidor HTTP<br/><b>api.py</b><br/><i>FastAPI + Pydantic</i>"]
-    Agent["🧠 Núcleo de IA<br/><b>agent.py</b><br/><i>+ protocols.py</i>"]
+    Agent["🧠 Núcleo de IA<br/><b>agent.py</b><br/><i>+ travas determinísticas</i>"]
+    Protocols["📋 <b>protocols.py</b><br/><i>cores · limiares</i>"]
+    DB["💾 <b>db.py</b><br/><i>SQLite · fila</i>"]
     Groq["☁️ <b>Groq</b><br/><i>Cloud · gratuito · &lt;1s</i>"]
     Ollama["💻 <b>Ollama</b><br/><i>Local · privado</i>"]
 
-    Browser -- "POST /api/triagem" --> API
+    Browser -- "POST /api/triagem<br/>GET /api/fila<br/>PATCH /api/fila/{id}" --> API
     API -- "classificar(dados)" --> Agent
+    API -- "inserir/listar/update" --> DB
+    Agent -- "limiares" --> Protocols
     Agent -- "prompt clínico" --> Groq
     Agent -- "prompt clínico" --> Ollama
     Groq -. "JSON" .-> Agent
     Ollama -. "JSON" .-> Agent
-    Agent -. "TriagemResult" .-> API
+    Agent -. "TriagemResult<br/>(c/ inconsistência)" .-> API
     API -. "JSON estruturado" .-> Browser
 
     classDef cliente fill:#eef2ff,stroke:#6366f1,color:#312e81
     classDef servidor fill:#f0fdfa,stroke:#0d9488,color:#134e4a
+    classDef storage fill:#fce7f3,stroke:#db2777,color:#831843
     classDef llm fill:#fef3c7,stroke:#f59e0b,color:#78350f
     class Browser cliente
-    class API,Agent servidor
+    class API,Agent,Protocols servidor
+    class DB storage
     class Groq,Ollama llm
 ```
 
@@ -67,29 +86,38 @@ flowchart LR
 
 | Camada | Arquivo | Responsabilidade |
 |--------|---------|------------------|
-| **Frontend** | `frontend/index.html` | Interface do enfermeiro: formulário, exibição do resultado, histórico da sessão (localStorage) |
-| **API HTTP** | `api.py` | Validação dos dados (Pydantic), roteamento, tratamento de erros, serve o frontend |
-| **Agente de IA** | `agent.py` | Monta o prompt clínico, escolhe e chama o backend LLM, parseia o JSON de resposta |
-| **Protocolo** | `protocols.py` | Constantes do Manchester: cores, tempos máximos, sinais de alarme, faixas de referência |
+| **Frontend** | `frontend/index.html` | Interface do enfermeiro: formulário, resultado, **aba Fila** com cronômetro Manchester, histórico da sessão (localStorage), nome do enfermeiro persistido entre sessões |
+| **API HTTP** | `api.py` | Validação dos dados (Pydantic), roteamento, endpoints de triagem e de fila, tratamento de erros, serve o frontend |
+| **Agente de IA** | `agent.py` | Monta o prompt clínico, chama o backend LLM, aplica **travas determinísticas** sobre os sinais vitais, parseia o JSON e marca inconsistências |
+| **Protocolo** | `protocols.py` | Constantes do Manchester: cores, tempos máximos, sinais de alarme, faixas de referência e `LIMIARES_CRITICOS` usados pelas travas |
+| **Persistência** | `db.py` | Camada SQLite (zero dependências externas): `init_db`, `inserir_triagem`, `listar_fila`, `atualizar_status`. Banco em `triagens.db` |
 | **LLM (cloud)** | Groq API | Geração da classificação + justificativa em linguagem natural — resposta em &lt;1s |
 | **LLM (local)** | Ollama | Mesmo papel da Groq, mas rodando 100% offline na máquina do usuário |
+| **Avaliação** | `eval/runner.py` | Script standalone que roda 30 vinhetas clínicas (`eval/golden_set.json`) contra todos os modelos Groq, calcula acurácia e matriz de confusão |
 
-A separação entre **frontend estático**, **backend Python** e **provedor LLM** desacopla a interface da lógica de IA. O mesmo `agent.py` pode ser reaproveitado em outras interfaces (CLI, mobile, integração com prontuário eletrônico) sem modificação. A troca entre Groq e Ollama acontece em runtime através de uma classe abstrata `LLMBackend` com duas implementações (`GroqBackend` e `OllamaBackend`).
+A separação entre **frontend estático**, **backend Python**, **persistência** e **provedor LLM** desacopla a interface da lógica de IA. O mesmo `agent.py` pode ser reaproveitado em outras interfaces (CLI, mobile, integração com prontuário eletrônico) sem modificação. A troca entre Groq e Ollama acontece em runtime através de uma classe abstrata `LLMBackend` com duas implementações (`GroqBackend` e `OllamaBackend`).
 
 ---
 
 ## 3. Estrutura de arquivos
 
 ```
-Projeto Topicos/
-├── api.py                  # Servidor FastAPI (entry point)
-├── agent.py                # Núcleo de IA + abstração de backend
-├── protocols.py            # Constantes do Protocolo de Manchester
+manchester-ai/
+├── api.py                  # Servidor FastAPI (entry point) — endpoints /api/triagem e /api/fila
+├── agent.py                # Núcleo de IA + abstração de backend + travas determinísticas
+├── protocols.py            # Constantes Manchester: CORES, FAIXAS_REFERENCIA, LIMIARES_CRITICOS
+├── db.py                   # Camada SQLite da fila viva (sem dependências externas)
+├── triagens.db             # Banco SQLite gerado em runtime (ignorado pelo git)
 ├── frontend/
-│   └── index.html          # Single-page app (Tailwind + Lucide + JS vanilla)
+│   └── index.html          # SPA com aba "Triagem" e aba "Fila" (Tailwind + Lucide + JS vanilla)
+├── eval/
+│   ├── golden_set.json     # 30 vinhetas clínicas (6 por cor) com cor esperada
+│   ├── runner.py           # Avalia o classificador em todos os modelos Groq
+│   ├── results_*.json      # Relatórios versionados de cada execução (ignorados pelo git)
+│   └── README.md           # Como rodar e interpretar
 ├── requirements.txt        # Dependências Python
 ├── .env.example            # Template para a chave da API
-├── .gitignore              # Ignora .env e venv
+├── .gitignore              # Ignora .env, venv, triagens.db e eval/results_*
 └── README.md               # Este arquivo
 ```
 
@@ -328,47 +356,184 @@ Para parar o servidor: `Ctrl + C` no terminal.
 
 ## 8. Como usar
 
-1. **Escolha o backend** no canto superior direito (botão "Groq · modelo"). Você pode trocar entre Groq (cloud) e Ollama (local) e selecionar o modelo desejado.
-2. **Carregue um caso demo** clicando em um dos chips no topo da página (*Tosse leve*, *Cefaleia + HAS* ou *Dor torácica*) para preencher o formulário com um cenário típico.
-3. **Preencha ou ajuste** os campos: idade, sexo, sinais vitais (PA, FC, SpO₂, temperatura) e a descrição livre dos sintomas. O campo de histórico clínico é opcional.
-4. Clique em **Realizar triagem**.
-5. O resultado aparece à direita com:
+### 8.1. Realizar uma triagem
+
+1. **Identifique o enfermeiro responsável** no topo do formulário (nome ou matrícula). O valor é persistido em `localStorage` para não precisar redigitar a cada triagem.
+2. **Escolha o backend** no canto superior direito (botão "Groq · modelo"). Você pode trocar entre Groq (cloud) e Ollama (local) e selecionar o modelo desejado.
+3. **Carregue um caso demo** clicando em um dos chips no topo da página (*Tosse leve*, *Cefaleia + HAS* ou *Dor torácica*) para preencher o formulário com um cenário típico.
+4. **Preencha os dados do paciente**: nome (opcional), idade, sexo, sinais vitais (PA, FC, SpO₂, temperatura) e a descrição livre dos sintomas. O campo de histórico clínico é opcional.
+5. Clique em **Realizar triagem**.
+6. O resultado aparece à direita com:
    - **Cor do Manchester** (vermelho, laranja, amarelo, verde, azul) e tempo máximo de espera
+   - **Banner de inconsistência** (quando aplicável) — alerta amarelo informando que as travas determinísticas elevaram a classificação que o LLM havia escolhido, listando os critérios objetivos disparados (ex.: *"SpO₂ 88% < 90%"*)
    - **Justificativa clínica** em linguagem natural (XAI)
    - **Sinais de alerta** identificados pelo modelo
    - **Perguntas adicionais sugeridas** quando há ambiguidade
    - **Nível de confiança** do modelo na decisão
-6. O **histórico da sessão** fica disponível abaixo do resultado e é persistido no `localStorage` do navegador (sobrevive a reload, mas é apagado ao limpar o cache).
+7. O **histórico da sessão** fica disponível abaixo do resultado e é persistido no `localStorage` do navegador.
+
+### 8.2. Consultar a fila
+
+Cada triagem é gravada automaticamente no banco SQLite. Para ver a fila ordenada:
+
+1. Clique na aba **Fila** no canto superior direito (ao lado do botão Triagem).
+2. Cada paciente é exibido como um card com:
+   - Banda colorida da cor Manchester e nome do paciente
+   - **Cronômetro regressivo** mostrando o tempo restante até estourar a janela do protocolo. Quando o tempo acaba, o cronômetro pisca em vermelho indicando atraso.
+   - Sinais vitais resumidos, enfermeiro responsável, justificativa colapsável
+   - Tag amarela "Trava" quando a classificação foi corrigida pelas regras determinísticas
+   - Botões **Marcar atendido** e **Dispensar** para mover o paciente para fora da fila ativa
+3. Marque a checkbox **Incluir finalizados** para ver também atendimentos já concluídos.
+4. O badge vermelho ao lado do botão "Fila" mostra quantos pacientes estão aguardando.
+5. A fila persiste entre reinícios do servidor — o banco fica em `triagens.db` na raiz do projeto.
 
 ---
 
 ## 9. Endpoints da API
 
-| Método | Rota             | Descrição |
-|--------|------------------|-----------|
-| GET    | `/`              | Serve o frontend (`index.html`) |
-| GET    | `/api/health`    | Health check (retorna `{"status":"ok"}`) |
-| GET    | `/api/models`    | Lista modelos disponíveis por backend e cores do Manchester |
-| POST   | `/api/triagem`   | Executa a triagem (body JSON com dados do paciente) |
-| GET    | `/api/docs`      | Documentação interativa Swagger UI |
+| Método | Rota                  | Descrição |
+|--------|-----------------------|-----------|
+| GET    | `/`                   | Serve o frontend (`index.html`) |
+| GET    | `/api/health`         | Health check (retorna `{"status":"ok"}`) |
+| GET    | `/api/models`         | Lista modelos disponíveis por backend e cores do Manchester |
+| POST   | `/api/triagem`        | Executa a triagem (body JSON com dados do paciente, enfermeiro e modelo). Persiste no SQLite e retorna o `triagem_id`. |
+| GET    | `/api/fila`           | Lista pacientes na fila ordenados por gravidade Manchester e ordem de chegada. Aceita `?incluir_finalizados=true` para incluir atendidos/dispensados. |
+| PATCH  | `/api/fila/{id}`      | Atualiza o status de uma triagem. Body: `{"status": "atendido" \| "dispensado" \| "aguardando"}`. Retorna 404 se o id não existir. |
+| GET    | `/api/docs`           | Documentação interativa Swagger UI |
 
 Exemplo de chamada manual via `curl`:
 
 ```bash
+# Realizar uma triagem
 curl -X POST http://localhost:8000/api/triagem \
   -H "Content-Type: application/json" \
   -d "{
+    \"enfermeiro\": \"Ana Souza · COREN-123456\",
+    \"paciente_nome\": \"João da Silva\",
     \"idade\": 62, \"sexo\": \"Masculino\", \"pressao\": \"90/60\",
     \"frequencia_cardiaca\": 115, \"spo2\": 91, \"temperatura\": 36.4,
     \"sintomas\": \"Dor no peito intensa irradiando para braço esquerdo, falta de ar.\",
     \"historico\": \"Hipertenso, diabético, tabagista.\",
     \"backend\": \"Groq\", \"modelo\": \"llama-3.1-8b-instant\"
   }"
+
+# Listar a fila ativa
+curl http://localhost:8000/api/fila
+
+# Marcar uma triagem como atendida
+curl -X PATCH http://localhost:8000/api/fila/1 \
+  -H "Content-Type: application/json" \
+  -d "{\"status\": \"atendido\"}"
+```
+
+A resposta de `/api/triagem` inclui campos extras quando as travas determinísticas disparam:
+
+```json
+{
+  "triagem_id": 42,
+  "classificacao": "VERMELHO",
+  "classificacao_llm": "LARANJA",
+  "inconsistencia": true,
+  "cor_regra": "VERMELHO",
+  "motivos_regra": ["SpO2 88% < 90% (hipoxemia crítica)"],
+  "justificativa": "...",
+  "sinais_alerta": [...],
+  "confianca": "ALTA",
+  "backend_usado": "Groq (llama-3.1-8b-instant)",
+  "cor_info": {...}
+}
 ```
 
 ---
 
-## 10. Resolução de problemas comuns
+## 10. Travas determinísticas (rule-based override)
+
+LLMs podem subestimar a gravidade em casos limítrofes. Para garantir um piso de segurança, o agente aplica uma camada determinística sobre os sinais vitais informados. Os limiares estão centralizados em [protocols.py](protocols.py) na constante `LIMIARES_CRITICOS`:
+
+| Sinal vital | Limiar | Cor forçada |
+|-------------|--------|-------------|
+| SpO₂ < 90% | hipoxemia crítica | VERMELHO |
+| PA sistólica < 90 mmHg | hipotensão grave | VERMELHO |
+| PA sistólica > 220 mmHg | crise hipertensiva | LARANJA |
+| FC > 140 bpm | taquicardia severa | LARANJA |
+| FC < 40 bpm | bradicardia severa | LARANJA |
+| Temperatura > 39,5 °C | hipertermia severa | LARANJA |
+| Temperatura < 35 °C | hipotermia | LARANJA |
+
+### Comportamento
+
+- As travas só **sobem** a gravidade — nunca rebaixam a classificação do LLM.
+- Quando o LLM escolhe uma cor menos grave que a indicada pelas travas, a classificação final é a da trava e a resposta marca `inconsistencia: true` com a lista de motivos.
+- O frontend exibe um **banner amarelo** indicando que houve correção, com os critérios objetivos disparados.
+- Casos onde o LLM já chegou a uma cor mais grave (por contexto clínico, ex.: trauma penetrante) são preservados.
+
+### Ajustar os limiares
+
+Os valores são conservadores para reduzir falsos positivos. Se quiser tornar o sistema mais sensível (ex.: SpO₂ ≤ 92 já vira amarelo), edite `LIMIARES_CRITICOS` em [protocols.py](protocols.py) e a função `_avaliar_travas()` em [agent.py](agent.py).
+
+---
+
+## 11. Fila viva
+
+Toda triagem é persistida automaticamente em SQLite (`triagens.db` na raiz do projeto). A camada de persistência está em [db.py](db.py) e usa apenas a biblioteca `sqlite3` built-in do Python — nenhuma dependência externa adicional.
+
+### Schema da tabela
+
+A tabela `triagens` armazena dados do paciente, classificação, justificativa, identificação do enfermeiro, flags de inconsistência e o status (`aguardando`, `atendido`, `dispensado`). O `init_db()` é idempotente e migra bancos antigos via `ALTER TABLE` quando novas colunas são adicionadas.
+
+### Ordenação da fila
+
+Pacientes em status `aguardando` são ordenados primeiro por gravidade Manchester (vermelho → laranja → amarelo → verde → azul) e depois por ordem de chegada (ascendente). Isso permite que o enfermeiro priorize sempre o paciente mais grave que está esperando há mais tempo.
+
+### Cronômetro regressivo
+
+O tempo máximo de cada cor (`CORES[*]['tempo_max']` em [protocols.py](protocols.py)) é enviado ao frontend, que calcula o tempo restante a partir do `criado_em`. Quando o tempo se esgota, o cronômetro fica vermelho e piscante exibindo o atraso em minutos.
+
+### Backup / inspeção manual
+
+Como é SQLite puro, qualquer ferramenta de SQLite abre o banco:
+
+```bash
+sqlite3 triagens.db "SELECT id, criado_em, classificacao, status FROM triagens ORDER BY id DESC LIMIT 10;"
+```
+
+---
+
+## 12. Avaliação com golden set
+
+O diretório `eval/` contém um conjunto fixo de 30 vinhetas clínicas (6 por cor Manchester) e um runner que mede a qualidade do classificador.
+
+### Rodar a avaliação
+
+Com o venv ativo e `GROQ_API_KEY` configurada:
+
+```bash
+# Avalia os 3 modelos Groq (default)
+python eval/runner.py
+
+# Avalia apenas um modelo específico
+python eval/runner.py --modelo llama-3.3-70b-versatile
+
+# Inclui os modelos Ollama (precisa do serviço local rodando)
+python eval/runner.py --com-ollama
+```
+
+### O que é medido
+
+- **Acurácia exata** — percentual de cores classificadas exatamente como esperado.
+- **Acurácia ± 1 cor** — aceita cores adjacentes (errar VERMELHO por LARANJA conta como acerto). Reflete o impacto clínico real.
+- **Erros graves** — distância ≥ 2 (ex.: VERDE quando o esperado era VERMELHO).
+- **Latência média e máxima** por modelo.
+- **Matriz de confusão 5×5** (cor esperada vs. cor obtida) por modelo.
+- Cada caso registra se as travas determinísticas dispararam.
+
+O relatório é impresso no console e salvo em `eval/results_<timestamp>.json` para versionamento. Útil para comparar modelos ao longo do tempo e detectar regressão ao trocar de versão.
+
+Detalhes completos em [eval/README.md](eval/README.md).
+
+---
+
+## 13. Resolução de problemas comuns
 
 ### "Python was not found" no Windows
 
@@ -451,7 +616,7 @@ Provavelmente seu navegador bloqueou o CDN do Tailwind (rede corporativa, ad-blo
 
 ---
 
-## 11. Protocolo de Manchester
+## 14. Protocolo de Manchester
 
 | Cor          | Tempo máximo | Significado                            |
 |--------------|--------------|----------------------------------------|
@@ -465,14 +630,17 @@ A classificação considera os sinais vitais informados (frequência cardíaca, 
 
 ---
 
-## 12. Limitações conhecidas
+## 15. Limitações conhecidas
 
 - **Não substitui avaliação médica.** É uma prova de conceito acadêmica, não um produto médico aprovado.
 - **Sem exame físico.** O sistema trabalha apenas com a descrição verbal e os sinais vitais informados pelo enfermeiro.
 - **Sem integração com prontuário eletrônico.** Cada triagem é avaliada isoladamente, sem conhecer o histórico do paciente em outras consultas.
-- **Viés do modelo.** LLMs podem refletir vieses dos dados de treinamento, especialmente em populações sub-representadas (idosos, pediátricos, doenças tropicais).
+- **Sem autenticação real.** A identificação do enfermeiro é texto livre — não há login, hash de senha nem auditoria de sessão. Em produção real isso seria substituído por um login com integração ao sistema institucional.
+- **Viés do modelo.** LLMs podem refletir vieses dos dados de treinamento, especialmente em populações sub-representadas (idosos, pediátricos, doenças tropicais). As travas determinísticas mitigam parcialmente em casos com sinais vitais alterados, mas não em quadros que dependem só da descrição.
+- **Travas determinísticas são conservadoras.** Os limiares foram escolhidos para reduzir falsos positivos — alguns casos clinicamente vermelhos com sinais vitais limítrofes (ex.: PA = 90 mmHg) podem não acionar a trava e ficar dependentes da decisão do LLM.
 - **Dependência da qualidade da descrição.** Sintomas mal descritos comprometem a classificação. O sistema mitiga isso solicitando perguntas adicionais e expressando o nível de confiança.
 - **Modelos pequenos podem retornar JSON inválido.** Se acontecer, troque para um modelo maior (ex: `llama3.1:8b` no Ollama ou `llama-3.3-70b-versatile` na Groq).
+- **Golden set é sintético.** As 30 vinhetas em `eval/golden_set.json` foram redigidas manualmente para cobrir as 5 cores e não representam pacientes reais. A acurácia medida é indicativa, não validação clínica formal.
 
 ---
 

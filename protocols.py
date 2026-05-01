@@ -99,6 +99,21 @@ FAIXAS_REFERENCIA = {
     },
 }
 
+# Limiares numéricos usados pelas travas determinísticas (rule-based override).
+# Quando um sinal vital cai fora destas faixas, a triagem força a cor indicada
+# independentemente do que o LLM responder — o LLM continua sendo chamado para
+# gerar a justificativa em linguagem natural, mas a classificação final é
+# sobrescrita e a divergência fica registrada como "inconsistencia".
+LIMIARES_CRITICOS = {
+    "spo2_min": 90,            # SpO2 < 90  → VERMELHO
+    "pa_sistolica_min": 90,    # PA sis < 90 → VERMELHO
+    "pa_sistolica_max": 220,   # PA sis > 220 → LARANJA (crise hipertensiva)
+    "fc_max": 140,             # FC > 140   → LARANJA
+    "fc_min": 40,              # FC < 40    → LARANJA
+    "temp_max": 39.5,          # T > 39.5   → LARANJA
+    "temp_min": 35.0,          # T < 35     → LARANJA
+}
+
 
 def get_cor_info(classificacao: str) -> dict:
     """Retorna dict com info da cor, ou um dict default se classificação for inválida."""

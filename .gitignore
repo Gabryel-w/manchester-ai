@@ -25,3 +25,12 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Banco SQLite da fila de triagens
+triagens.db
+triagens.db-journal
+triagens.db-shm
+triagens.db-wal
+
+# Relatórios gerados pelo runner do golden set
+eval/results_*.json
