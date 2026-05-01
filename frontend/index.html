@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triagem Clínica · Sistema de Apoio à Decisão</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50:  '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            },
+            accent: {
+              50:  '#f0fdfa',
+              100: '#ccfbf1',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+            },
+          },
+          boxShadow: {
+            'soft':   '0 1px 2px rgb(15 23 42 / 0.04), 0 2px 4px rgb(15 23 42 / 0.04)',
+            'card':   '0 1px 3px rgb(15 23 42 / 0.05), 0 8px 24px -8px rgb(15 23 42 / 0.10)',
+            'lifted': '0 2px 4px rgb(79 70 229 / 0.10), 0 12px 28px -8px rgb(79 70 229 / 0.25)',
+          },
+          backgroundImage: {
+            'gradient-brand':   'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+            'gradient-surface': 'linear-gradient(180deg, #ffffff 0%, #fafbff 100%)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+    /* Subtle dot pattern background */
+    .bg-dots {
+      background-color: #f8fafc;
+      background-image: radial-gradient(circle at 1px 1px, rgb(15 23 42 / 0.04) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+    /* Spinner */
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Smooth reveal animation */
+    .reveal { animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    /* Custom scrollbar for textareas */
+    textarea::-webkit-scrollbar { width: 8px; }
+    textarea::-webkit-scrollbar-track { background: transparent; }
+    textarea::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    /* Hide arrows on number inputs */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+  </style>
+</head>
+
+<body class="bg-dots text-slate-900 min-h-screen flex flex-col">
+
+  <!-- ============================================================ -->
+  <!-- HEADER                                                       -->
+  <!-- ============================================================ -->
+  <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+
+      <div class="flex items-center gap-3">
+        <div class="relative h-9 w-9 rounded-xl bg-gradient-brand shadow-lifted flex items-center justify-center">
+          <i data-lucide="activity" class="w-4.5 h-4.5 text-white" style="width:18px;height:18px"></i>
+        </div>
+        <div class="leading-tight">
+          <div class="text-sm font-semibold tracking-tight text-slate-900">Triagem Clínica</div>
+          <div class="text-[11px] text-slate-500 font-medium">Sistema de Apoio à Decisão · Manchester</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <!-- Status pill -->
+        <div id="status-pill" class="hidden md:inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+          <span class="relative flex h-2 w-2">
+            <span id="status-ping" class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
+            <span id="status-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span id="status-text">Conectando…</span>
+        </div>
+
+        <!-- Backend selector -->
+        <div class="relative">
+          <button id="backend-btn"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-soft hover:bg-slate-50 hover:border-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+            <i data-lucide="cpu" class="w-3.5 h-3.5 text-brand-600"></i>
+            <span id="backend-label" class="whitespace-nowrap">Groq</span>
+            <span class="text-slate-300">·</span>
+            <span id="model-label" class="text-slate-500 font-medium whitespace-nowrap max-w-[180px] truncate">—</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </button>
+
+          <div id="backend-menu" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-card p-3 z-40">
+            <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Backend LLM</div>
+            <div class="grid grid-cols-2 gap-2 mt-1.5 mb-3">
+              <button data-backend="Groq"
+                class="backend-opt group rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 group-hover:text-brand-700">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i> Groq
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">Cloud · &lt; 1 segundo</div>
+              </button>
+              <button data-backend="Ollama"
+                class="backend-opt group rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 group-hover:text-brand-700">
+                  <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-emerald-600"></i> Ollama
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">Local · privado</div>
+              </button>
+            </div>
+            <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Modelo</div>
+            <select id="model-select"
+              class="w-full mt-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- HERO / Sub-header                                            -->
+  <!-- ============================================================ -->
+  <section class="border-b border-slate-200/70 bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-7 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+      <div class="max-w-2xl">
+        <div class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 mb-3">
+          <i data-lucide="sparkles" class="w-3 h-3"></i> Nova avaliação
+        </div>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900">Triagem assistida por IA</h1>
+        <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+          Avaliação seguindo o Protocolo de Manchester com explicabilidade nativa.
+          O modelo justifica cada classificação em linguagem natural para revisão do enfermeiro.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Casos demonstração</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button data-case="azul"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-cyan-500 hover:bg-cyan-50/50 hover:text-cyan-700">
+            <span class="h-2 w-2 rounded-full bg-[#17A2B8]"></span> Tosse leve
+          </button>
+          <button data-case="amarelo"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-yellow-500 hover:bg-yellow-50/50 hover:text-yellow-700">
+            <span class="h-2 w-2 rounded-full bg-[#FFD700]"></span> Cefaleia + HAS
+          </button>
+          <button data-case="vermelho"
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-red-500 hover:bg-red-50/50 hover:text-red-700">
+            <span class="h-2 w-2 rounded-full bg-[#FF4444]"></span> Dor torácica
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- MAIN GRID                                                    -->
+  <!-- ============================================================ -->
+  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
+
+    <!-- ====================== FORM COLUMN ====================== -->
+    <form id="triagem-form" class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
+
+      <div class="p-7 md:p-8 space-y-8">
+
+        <!-- IDENTIFICAÇÃO -->
+        <section>
+          <div class="flex items-center gap-3 mb-5">
+            <div class="h-9 w-9 rounded-lg bg-brand-50 border border-brand-100 flex items-center justify-center">
+              <i data-lucide="user-round" class="w-4 h-4 text-brand-600"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight text-slate-900">Identificação</h2>
+              <p class="text-xs text-slate-500">Dados básicos do paciente</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="idade">Idade</label>
+              <div class="relative">
+                <input id="idade" name="idade" type="number" min="0" max="120" value="30" required
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">anos</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="sexo">Sexo</label>
+              <select id="sexo" name="sexo"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 shadow-soft cursor-pointer transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500">
+                <option>Masculino</option>
+                <option>Feminino</option>
+                <option selected>Não informado</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="pressao">Pressão arterial</label>
+              <div class="relative">
+                <input id="pressao" name="pressao" type="text" value="120/80" placeholder="120/80"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-14 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">mmHg</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- SINAIS VITAIS -->
+        <section>
+          <div class="flex items-center gap-3 mb-5">
+            <div class="h-9 w-9 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center">
+              <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-600"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight text-slate-900">Sinais vitais</h2>
+              <p class="text-xs text-slate-500">Frequência, saturação e temperatura</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="frequencia_cardiaca">Freq. cardíaca</label>
+              <div class="relative">
+                <input id="frequencia_cardiaca" name="frequencia_cardiaca" type="number" min="20" max="250" value="75"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-12 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">bpm</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="spo2">Saturação SpO₂</label>
+              <div class="relative">
+                <input id="spo2" name="spo2" type="number" min="50" max="100" value="98"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-8 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">%</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="temperatura">Temperatura</label>
+              <div class="relative">
+                <input id="temperatura" name="temperatura" type="number" step="0.1" min="30" max="43" value="36.5"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-9 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">°C</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- ANAMNESE -->
+        <section>
+          <div class="flex items-center gap-3 mb-5">
+            <div class="h-9 w-9 rounded-lg bg-accent-50 border border-accent-100 flex items-center justify-center">
+              <i data-lucide="clipboard-list" class="w-4 h-4 text-accent-600"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold tracking-tight text-slate-900">Anamnese</h2>
+              <p class="text-xs text-slate-500">Queixa principal e histórico</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5" for="sintomas">
+                <span>Queixa principal e sintomas <span class="text-red-500">*</span></span>
+                <span class="text-[10px] font-medium text-slate-400 normal-case" id="sintomas-counter">0 caracteres</span>
+              </label>
+              <textarea id="sintomas" name="sintomas" rows="6" required
+                placeholder="Ex.: Paciente refere dor de cabeça intensa há 6 horas, com náusea associada. Nega febre, vômitos ou alterações visuais."
+                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[120px]"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="historico">
+                Histórico clínico relevante <span class="text-slate-400 font-normal">(opcional)</span>
+              </label>
+              <textarea id="historico" name="historico" rows="3"
+                placeholder="Ex.: Diabético tipo 2, hipertenso em uso de losartana. Tabagista 20 maços/ano."
+                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[80px]"></textarea>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Submit footer -->
+      <div class="border-t border-slate-100 bg-slate-50/50 px-7 md:px-8 py-4 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p class="text-[11px] text-slate-500 flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-accent-600"></i>
+          <span>Em modo Ollama, nenhum dado sai da sua máquina.</span>
+        </p>
+        <button type="submit" id="submit-btn"
+          class="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-brand px-5 py-2.5 text-sm font-semibold text-white shadow-lifted transition-all hover:shadow-xl hover:-translate-y-px active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-brand-500/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
+          <i data-lucide="stethoscope" class="w-4 h-4"></i>
+          <span>Realizar triagem</span>
+        </button>
+      </div>
+    </form>
+
+    <!-- ====================== RESULT COLUMN ====================== -->
+    <aside class="lg:col-span-5 space-y-6">
+
+      <!-- Result card -->
+      <div id="result-panel" class="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
+
+        <!-- Empty state -->
+        <div id="empty-state" class="px-6 py-12 text-center">
+          <div class="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center mb-4 shadow-soft">
+            <i data-lucide="clipboard-check" class="w-6 h-6 text-slate-400"></i>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900">Aguardando avaliação</h3>
+          <p class="text-xs text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">
+            Preencha o formulário ao lado e clique em <span class="font-semibold text-slate-700">Realizar triagem</span> para gerar a classificação de risco.
+          </p>
+          <div class="mt-5 inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-500">
+            <i data-lucide="zap" class="w-3 h-3 text-amber-500"></i> Resposta típica em &lt; 1 segundo
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-state" class="hidden px-6 py-12 text-center">
+          <div class="mx-auto h-12 w-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center mb-4">
+            <div class="h-6 w-6 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin"></div>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900">Avaliando paciente</h3>
+          <p id="loading-detail" class="text-xs text-slate-500 mt-2">Consultando o modelo…</p>
+        </div>
+
+        <!-- Error state -->
+        <div id="error-state" class="hidden p-6">
+          <div class="flex items-start gap-3 rounded-xl bg-red-50 border border-red-100 p-4">
+            <div class="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-sm font-bold text-red-900">Erro na triagem</h3>
+              <p id="error-detail" class="text-xs text-red-700 mt-1 break-words leading-relaxed"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="success-state" class="hidden">
+          <!-- Color band -->
+          <div id="result-band" class="px-6 py-5 reveal relative overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-br from-white/0 via-white/0 to-white/15"></div>
+            <div class="relative flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="text-[10px] font-bold uppercase tracking-widest opacity-90">Classificação de risco</div>
+                <div class="flex items-baseline gap-2.5 mt-1">
+                  <span id="result-label" class="text-3xl font-extrabold tracking-tight">—</span>
+                  <span id="result-time" class="text-xs font-semibold opacity-90">—</span>
+                </div>
+                <div id="result-description" class="text-xs font-medium opacity-90 mt-1.5"></div>
+              </div>
+              <div class="flex flex-col items-end gap-2 shrink-0">
+                <div id="result-icon" class="text-3xl leading-none"></div>
+                <span id="result-confidence" class="inline-flex items-center gap-1 rounded-full bg-white/20 backdrop-blur px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Justification + alerts -->
+          <div class="p-6 space-y-5 reveal">
+            <div>
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                <i data-lucide="brain-circuit" class="w-3.5 h-3.5 text-brand-600"></i>
+                Justificativa clínica · XAI
+              </div>
+              <div class="rounded-lg bg-slate-50 border border-slate-100 p-4">
+                <p id="result-justification" class="text-sm leading-relaxed text-slate-700"></p>
+              </div>
+            </div>
+
+            <div id="alerts-section" class="hidden">
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-amber-600"></i>
+                Sinais de alerta
+              </div>
+              <ul id="alerts-list" class="space-y-1.5"></ul>
+            </div>
+
+            <div id="questions-section" class="hidden">
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                <i data-lucide="message-circle-question" class="w-3.5 h-3.5 text-brand-600"></i>
+                Perguntas adicionais sugeridas
+              </div>
+              <ul id="questions-list" class="space-y-1.5"></ul>
+            </div>
+
+            <div class="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="cpu" class="w-3 h-3"></i>
+              <span id="result-backend">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div class="flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-slate-500"></i>
+            <h3 class="text-sm font-bold text-slate-900">Histórico da sessão</h3>
+            <span id="history-count" class="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-slate-200 px-1.5 text-[10px] font-bold text-slate-600">0</span>
+          </div>
+          <button id="clear-history"
+            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+            <i data-lucide="trash-2" class="w-3 h-3"></i> Limpar
+          </button>
+        </div>
+        <div id="history-list" class="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+          <div id="history-empty" class="px-5 py-8 text-center">
+            <i data-lucide="inbox" class="w-6 h-6 text-slate-300 mx-auto mb-2"></i>
+            <p class="text-xs text-slate-500">Nenhuma triagem realizada nesta sessão.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER                                                       -->
+  <!-- ============================================================ -->
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="max-w-7xl mx-auto px-6 py-5 flex flex-col gap-3">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Manchester:</span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#FF4444] ring-2 ring-red-100"></span> Vermelho · imediato
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#FF8C00] ring-2 ring-orange-100"></span> Laranja · 10 min
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#FFD700] ring-2 ring-yellow-100"></span> Amarelo · 60 min
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#28A745] ring-2 ring-green-100"></span> Verde · 120 min
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span class="h-2.5 w-2.5 rounded-full bg-[#17A2B8] ring-2 ring-cyan-100"></span> Azul · 240 min
+        </span>
+      </div>
+      <p class="text-[11px] text-slate-500 leading-relaxed">
+        Prova de conceito acadêmica · Disciplina Tópicos Especiais em Computação II · URI ·
+        <span class="text-slate-400">Não substitui avaliação médica profissional. Toda decisão final é de responsabilidade da equipe clínica.</span>
+      </p>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- JAVASCRIPT                                                   -->
+  <!-- ============================================================ -->
+  <script>
+  const state = {
+    backend: 'Groq',
+    modelo: null,
+    modelos: { Groq: [], Ollama: [] },
+    cores: {},
+  };
+
+  const HISTORY_KEY = 'triagem_history_v1';
+  const PREF_KEY    = 'triagem_pref_v1';
+  const $ = (sel) => document.querySelector(sel);
+
+  function loadPrefs() {
+    try {
+      const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+      if (p.backend) state.backend = p.backend;
+      if (p.modelo)  state.modelo  = p.modelo;
+    } catch {}
+  }
+  function savePrefs() {
+    localStorage.setItem(PREF_KEY, JSON.stringify({ backend: state.backend, modelo: state.modelo }));
+  }
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+  }
+  function saveHistory(arr) { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(-30))); }
+
+  const TEST_CASES = {
+    azul: {
+      idade: 28, sexo: 'Masculino', pressao: '120/80',
+      frequencia_cardiaca: 72, spo2: 98, temperatura: 36.5,
+      sintomas: 'Tosse seca leve há 3 dias, sem febre, sem falta de ar. Refere apenas leve incômodo na garganta. Sem outros sintomas associados.',
+      historico: 'Sem comorbidades conhecidas. Não fumante.',
+    },
+    amarelo: {
+      idade: 45, sexo: 'Feminino', pressao: '150/95',
+      frequencia_cardiaca: 88, spo2: 97, temperatura: 36.8,
+      sintomas: 'Dor de cabeça intensa há 6 horas, pulsátil, em região occipital. Refere náuseas leves. Nega vômitos, alterações visuais ou déficit neurológico.',
+      historico: 'Hipertensa em uso irregular de losartana. Histórico de enxaqueca.',
+    },
+    vermelho: {
+      idade: 62, sexo: 'Masculino', pressao: '90/60',
+      frequencia_cardiaca: 115, spo2: 91, temperatura: 36.4,
+      sintomas: 'Dor no peito intensa irradiando para o braço esquerdo, iniciada há 30 minutos. Falta de ar intensa, sudorese fria profusa, palidez. Refere náuseas. Paciente visivelmente apreensivo.',
+      historico: 'Diabético, hipertenso, tabagista 30 maços/ano. Pai faleceu de IAM aos 58.',
+    },
+  };
+
+  function applyCase(key) {
+    const c = TEST_CASES[key]; if (!c) return;
+    $('#idade').value = c.idade;
+    $('#sexo').value = c.sexo;
+    $('#pressao').value = c.pressao;
+    $('#frequencia_cardiaca').value = c.frequencia_cardiaca;
+    $('#spo2').value = c.spo2;
+    $('#temperatura').value = c.temperatura;
+    $('#sintomas').value = c.sintomas;
+    $('#historico').value = c.historico;
+    updateCounter();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function fetchModels() {
+    const r = await fetch('/api/models');
+    if (!r.ok) throw new Error('Falha ao buscar modelos');
+    return r.json();
+  }
+  async function postTriagem(body) {
+    const r = await fetch('/api/triagem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `Erro HTTP ${r.status}`);
+    return data;
+  }
+
+  function renderModelSelect() {
+    const sel = $('#model-select');
+    sel.innerHTML = '';
+    const list = state.modelos[state.backend] || [];
+    list.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (state.modelo === m) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!state.modelo || !list.includes(state.modelo)) {
+      state.modelo = list[0] || null;
+      if (state.modelo) sel.value = state.modelo;
+    }
+    $('#backend-label').textContent = state.backend;
+    $('#model-label').textContent = state.modelo || '—';
+    // Highlight selected backend in menu
+    document.querySelectorAll('.backend-opt').forEach((b) => {
+      const active = b.dataset.backend === state.backend;
+      b.classList.toggle('border-brand-500', active);
+      b.classList.toggle('bg-brand-50/50', active);
+    });
+  }
+
+  function setupBackendMenu() {
+    const btn = $('#backend-btn'), menu = $('#backend-menu');
+    btn.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.toggle('hidden'); });
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && !btn.contains(e.target)) menu.classList.add('hidden');
+    });
+    menu.querySelectorAll('.backend-opt').forEach((b) => {
+      b.addEventListener('click', () => {
+        state.backend = b.dataset.backend;
+        state.modelo = null;
+        renderModelSelect();
+        savePrefs();
+      });
+    });
+    $('#model-select').addEventListener('change', (e) => {
+      state.modelo = e.target.value;
+      $('#model-label').textContent = state.modelo;
+      savePrefs();
+    });
+  }
+
+  function setStatus(connected, label) {
+    const pill = $('#status-pill'), txt = $('#status-text');
+    pill.classList.remove('hidden');
+    const dot = $('#status-dot'), ping = $('#status-ping');
+    if (connected) {
+      dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+      ping.className = 'absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping';
+      txt.textContent = label || 'Pronto';
+    } else {
+      dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+      ping.className = 'absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-0';
+      txt.textContent = label || 'Erro';
+    }
+  }
+
+  function showState(name) {
+    ['empty', 'loading', 'error', 'success'].forEach((s) => {
+      $(`#${s}-state`).classList.toggle('hidden', s !== name);
+    });
+  }
+
+  function renderResult(data) {
+    const cor = data.cor_info || {};
+    const band = $('#result-band');
+    band.style.backgroundColor = cor.hex_fundo || '#64748b';
+    band.style.color = cor.hex_texto || '#fff';
+
+    $('#result-label').textContent = data.classificacao || '—';
+    $('#result-icon').textContent  = cor.icone || '';
+    $('#result-time').textContent  = (cor.tempo_max != null && cor.tempo_max >= 0)
+      ? `· até ${cor.tempo_max} min`
+      : '';
+    $('#result-description').textContent = cor.descricao || '';
+    $('#result-confidence').textContent  = `Confiança: ${data.confianca || '—'}`;
+    $('#result-backend').textContent     = data.backend_usado || '';
+    $('#result-justification').textContent = data.justificativa || '';
+
+    const alertsBox = $('#alerts-section'), alertsList = $('#alerts-list');
+    alertsList.innerHTML = '';
+    if (data.sinais_alerta && data.sinais_alerta.length) {
+      alertsBox.classList.remove('hidden');
+      data.sinais_alerta.forEach((s) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-2.5 rounded-lg bg-amber-50/60 border border-amber-100 px-3 py-2 text-sm text-amber-900';
+        li.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 mt-0.5 text-amber-600 shrink-0"></i><span>${escapeHtml(s)}</span>`;
+        alertsList.appendChild(li);
+      });
+    } else {
+      alertsBox.classList.add('hidden');
+    }
+
+    const qBox = $('#questions-section'), qList = $('#questions-list');
+    qList.innerHTML = '';
+    if (data.perguntas_adicionais && data.perguntas_adicionais.length) {
+      qBox.classList.remove('hidden');
+      data.perguntas_adicionais.forEach((q) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-2.5 rounded-lg bg-brand-50/60 border border-brand-100 px-3 py-2 text-sm text-brand-900';
+        li.innerHTML = `<i data-lucide="help-circle" class="w-3.5 h-3.5 mt-0.5 text-brand-600 shrink-0"></i><span>${escapeHtml(q)}</span>`;
+        qList.appendChild(li);
+      });
+    } else {
+      qBox.classList.add('hidden');
+    }
+
+    showState('success');
+    lucide.createIcons();
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+  }
+
+  function renderHistory() {
+    const list = loadHistory();
+    const wrap = $('#history-list');
+    const empty = $('#history-empty');
+    $('#history-count').textContent = list.length;
+    wrap.querySelectorAll('.history-item').forEach((el) => el.remove());
+
+    if (list.length === 0) { empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    [...list].reverse().forEach((entry) => {
+      const item = document.createElement('div');
+      item.className = 'history-item px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors';
+      const cor = entry.cor_info || {};
+      const time = (entry.timestamp || '').split('T')[1]?.slice(0, 5) || '';
+      item.innerHTML = `
+        <span class="h-9 w-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 shadow-soft"
+              style="background-color: ${cor.hex_fundo || '#94a3b8'}; color: ${cor.hex_texto || '#fff'};">
+          ${cor.icone || ''}
+        </span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-900">${escapeHtml(entry.classificacao || '—')}</span>
+            <span class="text-[10px] text-slate-300">·</span>
+            <span class="text-[11px] text-slate-500 font-medium">${escapeHtml(entry.idade || '?')}a, ${escapeHtml(entry.sexo || '—')}</span>
+          </div>
+          <div class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml((entry.sintomas || '').slice(0, 80))}</div>
+        </div>
+        <span class="text-[10px] text-slate-400 shrink-0 font-medium tabular-nums">${time}</span>
+      `;
+      wrap.appendChild(item);
+    });
+  }
+
+  function pushHistory(payload, result) {
+    const list = loadHistory();
+    list.push({
+      timestamp: new Date().toISOString(),
+      idade: payload.idade,
+      sexo: payload.sexo,
+      sintomas: payload.sintomas,
+      classificacao: result.classificacao,
+      cor_info: result.cor_info,
+    });
+    saveHistory(list);
+    renderHistory();
+  }
+
+  function setLoading(on, modelo) {
+    const btn = $('#submit-btn');
+    btn.disabled = on;
+    btn.innerHTML = on
+      ? '<span class="spinner"></span><span>Processando…</span>'
+      : '<i data-lucide="stethoscope" class="w-4 h-4"></i><span>Realizar triagem</span>';
+    lucide.createIcons();
+    if (on) {
+      $('#loading-detail').textContent = `Consultando ${state.backend} (${modelo})…`;
+      showState('loading');
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const sintomas = $('#sintomas').value.trim();
+    if (!sintomas) { $('#sintomas').focus(); return; }
+    if (!state.modelo) {
+      $('#error-detail').textContent = 'Nenhum modelo selecionado. Abra o menu no canto superior direito e escolha um.';
+      showState('error'); return;
+    }
+
+    const payload = {
+      idade: parseInt($('#idade').value, 10),
+      sexo: $('#sexo').value,
+      pressao: $('#pressao').value,
+      frequencia_cardiaca: parseInt($('#frequencia_cardiaca').value, 10) || null,
+      spo2: parseInt($('#spo2').value, 10) || null,
+      temperatura: parseFloat($('#temperatura').value) || null,
+      sintomas,
+      historico: $('#historico').value.trim(),
+      backend: state.backend,
+      modelo: state.modelo,
+    };
+
+    setLoading(true, state.modelo);
+    try {
+      const data = await postTriagem(payload);
+      renderResult(data);
+      pushHistory(payload, data);
+    } catch (err) {
+      $('#error-detail').textContent = err.message || String(err);
+      showState('error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateCounter() {
+    const el = $('#sintomas-counter');
+    if (el) el.textContent = `${$('#sintomas').value.length} caracteres`;
+  }
+
+  async function init() {
+    lucide.createIcons();
+    loadPrefs();
+    setupBackendMenu();
+    renderHistory();
+    updateCounter();
+
+    $('#sintomas').addEventListener('input', updateCounter);
+
+    document.querySelectorAll('[data-case]').forEach((b) => {
+      b.addEventListener('click', () => applyCase(b.dataset.case));
+    });
+
+    $('#clear-history').addEventListener('click', () => {
+      saveHistory([]);
+      renderHistory();
+    });
+
+    $('#triagem-form').addEventListener('submit', handleSubmit);
+
+    try {
+      const m = await fetchModels();
+      state.modelos = { Groq: m.groq || [], Ollama: m.ollama || [] };
+      state.cores = m.cores || {};
+      renderModelSelect();
+      setStatus(true, 'API conectada');
+    } catch (err) {
+      setStatus(false, 'API offline');
+      $('#error-detail').textContent =
+        'Não consegui conectar à API. Verifique se o servidor está rodando: uvicorn api:app --reload';
+      showState('error');
+    }
+  }
+
+  init();
+  </script>
+</body>
+</html>
