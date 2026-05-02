@@ -6,6 +6,86 @@ Sistema de Apoio à Decisão (SAD) que utiliza um Large Language Model (LLM) par
 
 ---
 
+## ⚡ Quickstart (após clonar o repositório)
+
+Comandos mínimos para subir o sistema localmente. Para detalhes, requisitos por sistema operacional, troubleshooting e configurações avançadas, vá direto à [seção 5](#5-instalação-passo-a-passo).
+
+### Windows (PowerShell)
+
+```powershell
+# 1. Entrar na pasta clonada
+cd "Pasta_do_projeto"
+
+# 2. (uma vez só) Liberar execução de scripts no PowerShell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# 3. Criar e ativar o ambiente virtual
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 4. Instalar dependências
+pip install -r requirements.txt
+
+# 5. Configurar a chave da Groq (necessário para o backend cloud)
+copy .env.example .env
+notepad .env
+# → cole sua chave em GROQ_API_KEY=gsk_... (gere em https://console.groq.com/keys)
+
+# 6. ⭐ TREINAR O RANDOM FOREST (obrigatório se for usar o backend Ollama)
+python data\treinar_rf.py
+# → demora ~30s, gera data\rf_model.pkl
+
+# 7. (opcional) Instalar Ollama e baixar um modelo local
+#    Download: https://ollama.com/download
+ollama pull gemma2:2b
+
+# 8. Subir o servidor
+uvicorn api:app --reload
+```
+
+### macOS / Linux
+
+```bash
+cd "Projeto Topicos"
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+nano .env                          # cole sua chave da Groq
+python data/treinar_rf.py          # treina o RF (~30s)
+ollama pull gemma2:2b              # opcional, para backend local
+uvicorn api:app --reload
+```
+
+Acesse no navegador:
+
+```
+http://localhost:8000
+```
+
+### Por que treinar o Random Forest?
+
+O modelo `data/rf_model.pkl` **não é distribuído com o repositório** (foi adicionado ao `.gitignore`) por três razões:
+
+1. **Compatibilidade de versão** — pickles do scikit-learn dependem da versão exata em que foram criados. Re-treinar localmente garante zero `InconsistentVersionWarning`.
+2. **Tamanho e diff** — pickle é binário de ~5 MB; o git não consegue mostrar diffs e o histórico do repo incharia rapidamente.
+3. **Reprodutibilidade auditável** — qualquer pessoa pode regenerar o modelo a partir do CSV (`data/triagem_dataset.csv`) que está versionado, com o mesmo `random_state=42` produzindo bit-a-bit o mesmo resultado.
+
+O treinamento é rápido (~30 segundos numa máquina razoável) e roda uma única vez após clonar. Se você esquecer e selecionar Ollama no app, o sistema cai automaticamente no fluxo full-LLM como fallback transparente — funciona, só perde a vantagem de velocidade do RF.
+
+> Detalhes do que o RF faz, do dataset sintético e de quando re-treinar estão na [seção 11](#11-random-forest-no-backend-ollama).
+
+### Regenerar o dataset (opcional)
+
+O CSV `data/triagem_dataset.csv` (5.000 linhas, 45 colunas) já vem versionado. Se você quiser regerar do zero — por exemplo após editar `data/gerar_dataset.py` para adicionar cenários novos — basta:
+
+```powershell
+python data\gerar_dataset.py    # ~5s, sobrescreve o CSV
+python data\treinar_rf.py       # ~30s, re-treina com o novo CSV
+```
+
+---
+
 ## Sumário
 
 1. [Visão geral](#1-visão-geral)

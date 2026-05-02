@@ -34,3 +34,8 @@ triagens.db-wal
 
 # Relatórios gerados pelo runner do golden set
 eval/results_*.json
+
+# Modelo Random Forest treinado (regerar localmente com python data/treinar_rf.py)
+# Não é commitado por: (a) compatibilidade de versão do sklearn entre máquinas,
+# (b) pickle binário não diff bem no git, (c) reproduzível a partir do CSV.
+data/rf_model.pkl
