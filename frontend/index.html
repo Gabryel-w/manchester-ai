@@ -698,6 +698,15 @@
     });
   }
 
+  // Pre-aquece um modelo Ollama em background. Sem await — fire and forget.
+  // O servidor responde rapido (a chamada longa fica em background no Ollama),
+  // entao isso nao trava a UI.
+  function warmupOllama(modelo) {
+    if (!modelo) return;
+    fetch(`/api/warmup?modelo=${encodeURIComponent(modelo)}`, { method: 'POST' })
+      .catch(() => {/* silencioso: warmup e best-effort */});
+  }
+
   function setupBackendMenu() {
     const btn = $('#backend-btn'), menu = $('#backend-menu');
     btn.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.toggle('hidden'); });
@@ -710,12 +719,21 @@
         state.modelo = null;
         renderModelSelect();
         savePrefs();
+        // Se trocou para Ollama, ja dispara o pre-aquecimento do modelo
+        // selecionado. Quando o usuario clicar em "Realizar triagem", o
+        // modelo ja vai estar carregado em RAM/VRAM.
+        if (state.backend === 'Ollama' && state.modelo) {
+          warmupOllama(state.modelo);
+        }
       });
     });
     $('#model-select').addEventListener('change', (e) => {
       state.modelo = e.target.value;
       $('#model-label').textContent = state.modelo;
       savePrefs();
+      if (state.backend === 'Ollama') {
+        warmupOllama(state.modelo);
+      }
     });
   }
 
@@ -1323,6 +1341,11 @@
       renderModelSelect();
       setStatus(true, 'API conectada');
       refreshFilaBadge();
+      // Se o usuario voltou com Ollama selecionado das prefs, ja pre-aquece
+      // o modelo em background — assim a primeira triagem nao paga cold start.
+      if (state.backend === 'Ollama' && state.modelo) {
+        warmupOllama(state.modelo);
+      }
     } catch (err) {
       setStatus(false, 'API offline');
       $('#error-detail').textContent =

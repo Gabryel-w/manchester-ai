@@ -151,6 +151,23 @@ def models():
     )
 
 
+@app.post("/api/warmup")
+def warmup(modelo: str):
+    """
+    Pre-aquece um modelo Ollama (carrega em memoria) para a primeira
+    triagem real nao pagar o custo de cold start. Chamado pelo frontend
+    quando o usuario seleciona Ollama na sidebar.
+    """
+    try:
+        from agent import OllamaBackend
+
+        backend = OllamaBackend(model=modelo)
+        backend.warmup()
+        return {"status": "warmed", "modelo": modelo}
+    except Exception as e:
+        return {"status": "error", "modelo": modelo, "detail": str(e)}
+
+
 @app.post("/api/triagem", response_model=TriagemResponse)
 def triagem(req: TriagemRequest):
     """Executa a triagem do paciente."""

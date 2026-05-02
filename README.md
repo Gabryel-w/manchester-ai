@@ -18,11 +18,12 @@ Sistema de Apoio à Decisão (SAD) que utiliza um Large Language Model (LLM) par
 8. [Como usar](#8-como-usar)
 9. [Endpoints da API](#9-endpoints-da-api)
 10. [Travas determinísticas (rule-based override)](#10-travas-determinísticas-rule-based-override)
-11. [Fila viva](#11-fila-viva)
-12. [Avaliação com golden set](#12-avaliação-com-golden-set)
-13. [Resolução de problemas comuns](#13-resolução-de-problemas-comuns)
-14. [Protocolo de Manchester](#14-protocolo-de-manchester)
-15. [Limitações conhecidas](#15-limitações-conhecidas)
+11. [Random Forest no backend Ollama](#11-random-forest-no-backend-ollama)
+12. [Fila viva](#12-fila-viva)
+13. [Avaliação com golden set](#13-avaliação-com-golden-set)
+14. [Resolução de problemas comuns](#14-resolução-de-problemas-comuns)
+15. [Protocolo de Manchester](#15-protocolo-de-manchester)
+16. [Limitações conhecidas](#16-limitações-conhecidas)
 
 ---
 
@@ -34,68 +35,98 @@ O sistema permite que um enfermeiro descreva os sintomas e sinais vitais de um p
 
 A decisão final **não depende exclusivamente do LLM**:
 
-1. **Camada do LLM**: gera classificação + justificativa em linguagem natural (XAI).
-2. **Travas determinísticas (rule-based override)**: sobrepõem o LLM quando sinais vitais objetivos cruzam limiares críticos (SpO₂ < 90, PA sistólica < 90, FC > 140, T > 39,5 °C, etc.). Se a trava elevar a cor, a interface mostra um banner de **inconsistência** explicando a divergência. As travas só sobem a gravidade — nunca rebaixam.
-3. **Fila viva persistida**: cada triagem é gravada em SQLite com identificação do enfermeiro e do paciente, status de atendimento e cronômetro do tempo máximo Manchester.
+1. **Camada de classificação** — escolhe a cor Manchester. Pode ser:
+   - **LLM (Groq)** — o modelo cloud raciocina sobre o caso completo e devolve a cor + justificativa.
+   - **Random Forest local** — quando o backend é Ollama, um classificador estatístico treinado em 2.000 casos sintéticos atribui a cor em milissegundos (ver [seção 11](#11-random-forest-no-backend-ollama)).
+2. **Travas determinísticas (rule-based override)**: sobrepõem a camada de classificação quando sinais vitais objetivos cruzam limiares críticos (SpO₂ < 90, PA sistólica < 90, FC > 140, T > 39,5 °C, etc.). Se a trava elevar a cor, a interface mostra um banner de **inconsistência** explicando a divergência. As travas só sobem a gravidade — nunca rebaixam.
+3. **Camada de explicação (XAI)**: o LLM sempre gera a justificativa em linguagem natural — mesmo quando o RF foi quem classificou. Isso preserva a auditabilidade exigida pelo gestor (Shimizu).
+4. **Fila viva persistida**: cada triagem é gravada em SQLite com identificação do enfermeiro e do paciente, status de atendimento e cronômetro do tempo máximo Manchester.
 
 ### Backends de IA
 
-O backend de IA é **trocável em tempo de execução** entre dois provedores:
+O backend é **trocável em tempo de execução** entre dois provedores, e cada um usa um pipeline diferente:
 
-- **Groq**: API gratuita na nuvem, ultrarrápida (resposta em menos de 1 segundo)
-- **Ollama**: modelo local rodando na própria máquina (privacidade total, sem custo, sem dependência de internet)
+| Backend | Pipeline | Quando usar |
+|---------|----------|-------------|
+| **Groq** (cloud) | LLM faz tudo: classifica + justifica. Resposta em < 1s. | Demonstração, apresentação, qualidade máxima de raciocínio. |
+| **Ollama** (local) | **Random Forest** classifica em ms + LLM local gera apenas a justificativa (prompt 7× menor). | Privacidade total, zero dependência de internet, latência ainda aceitável em modelos pequenos como `gemma2:2b`. |
+
+A troca entre os dois acontece pelo seletor de backend no canto superior direito da interface, sem reiniciar o servidor.
 
 ---
 
 ## 2. Arquitetura
 
-A aplicação é dividida em camadas independentes que se comunicam por HTTP:
+A aplicação é dividida em camadas independentes que se comunicam por HTTP. O **agente faz dispatch dinâmico** dependendo do backend escolhido — o caminho hot é diferente pra Groq e pra Ollama:
 
 ```mermaid
-flowchart LR
+flowchart TB
     Browser["🌐 Navegador<br/><b>frontend/index.html</b><br/><i>Tailwind + Vanilla JS</i><br/>Triagem · Fila"]
     API["⚙️ Servidor HTTP<br/><b>api.py</b><br/><i>FastAPI + Pydantic</i>"]
-    Agent["🧠 Núcleo de IA<br/><b>agent.py</b><br/><i>+ travas determinísticas</i>"]
+    Agent["🧠 Dispatcher<br/><b>agent.py</b><br/><i>classificar()</i>"]
     Protocols["📋 <b>protocols.py</b><br/><i>cores · limiares</i>"]
     DB["💾 <b>db.py</b><br/><i>SQLite · fila</i>"]
-    Groq["☁️ <b>Groq</b><br/><i>Cloud · gratuito · &lt;1s</i>"]
-    Ollama["💻 <b>Ollama</b><br/><i>Local · privado</i>"]
+    Travas["🛡️ <b>Travas determinísticas</b><br/><i>SpO₂ · PA · FC · Temp</i>"]
 
-    Browser -- "POST /api/triagem<br/>GET /api/fila<br/>PATCH /api/fila/{id}" --> API
-    API -- "classificar(dados)" --> Agent
+    subgraph Groq_Path["▶ Caminho Groq (full-LLM)"]
+        Groq["☁️ <b>Groq Cloud</b><br/><i>llama-3.1 / 3.3 / gemma2</i><br/>classifica + justifica"]
+    end
+
+    subgraph Ollama_Path["▶ Caminho Ollama (RF + justificativa)"]
+        Features["🔬 <b>features.py</b><br/><i>21 flags + sinais vitais</i>"]
+        RF["🌲 <b>rf_classifier.py</b><br/><i>RandomForest treinado<br/>2000 casos · 86% F1</i>"]
+        OllamaLLM["💻 <b>Ollama local</b><br/><i>gemma2:2b · mistral:7b</i><br/>SÓ justificativa<br/>(prompt 7× menor)"]
+    end
+
+    Browser -- "POST /api/triagem<br/>GET /api/fila" --> API
     API -- "inserir/listar/update" --> DB
-    Agent -- "limiares" --> Protocols
-    Agent -- "prompt clínico" --> Groq
-    Agent -- "prompt clínico" --> Ollama
-    Groq -. "JSON" .-> Agent
-    Ollama -. "JSON" .-> Agent
-    Agent -. "TriagemResult<br/>(c/ inconsistência)" .-> API
-    API -. "JSON estruturado" .-> Browser
+    API -- "classificar(dados, backend)" --> Agent
+
+    Agent -. "se backend = Groq" .-> Groq
+    Agent -. "se backend = Ollama" .-> Features
+    Features -- "vetor de features" --> RF
+    RF -- "cor + confiança" --> Travas
+    Groq -- "cor + justificativa" --> Travas
+    Travas -- "cor final<br/>(eleva se necessário)" --> OllamaLLM
+    Travas -. "cor final" .-> Agent
+    OllamaLLM -- "justificativa NL" --> Agent
+    Agent -. "TriagemResult" .-> API
+    API -. "JSON" .-> Browser
 
     classDef cliente fill:#eef2ff,stroke:#6366f1,color:#312e81
     classDef servidor fill:#f0fdfa,stroke:#0d9488,color:#134e4a
     classDef storage fill:#fce7f3,stroke:#db2777,color:#831843
     classDef llm fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef ml fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef rule fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
     class Browser cliente
     class API,Agent,Protocols servidor
     class DB storage
-    class Groq,Ollama llm
+    class Groq,OllamaLLM llm
+    class Features,RF ml
+    class Travas rule
 ```
 
 ### Responsabilidades de cada camada
 
 | Camada | Arquivo | Responsabilidade |
 |--------|---------|------------------|
-| **Frontend** | `frontend/index.html` | Interface do enfermeiro: formulário, resultado, **aba Fila** com cronômetro Manchester, histórico da sessão (localStorage), nome do enfermeiro persistido entre sessões |
-| **API HTTP** | `api.py` | Validação dos dados (Pydantic), roteamento, endpoints de triagem e de fila, tratamento de erros, serve o frontend |
-| **Agente de IA** | `agent.py` | Monta o prompt clínico, chama o backend LLM, aplica **travas determinísticas** sobre os sinais vitais, parseia o JSON e marca inconsistências |
+| **Frontend** | `frontend/index.html` | Interface do enfermeiro: formulário, resultado, **aba Fila** com cronômetro Manchester, histórico da sessão (localStorage), nome do enfermeiro persistido entre sessões. Dispara warmup do Ollama em background ao trocar backend. |
+| **API HTTP** | `api.py` | Validação dos dados (Pydantic), roteamento, endpoints de triagem, fila e warmup, tratamento de erros, serve o frontend |
+| **Dispatcher** | `agent.py` | `classificar()` decide o pipeline pelo `isinstance(backend, OllamaBackend)`. Aplica **travas determinísticas** sobre o resultado de qualquer pipeline. |
+| **Pipeline LLM (Groq)** | `agent._classificar_full_llm` | Caminho clássico: monta prompt completo (~2k tokens), chama o LLM cloud, parseia JSON com classificação + justificativa. |
+| **Pipeline RF (Ollama)** | `agent._classificar_hibrido_rf` | Caminho híbrido: chama RF para classificar, depois LLM local com prompt enxuto (~300 tokens) só para a justificativa. |
+| **Features** | `features.py` | `extrair_features_para_rf(dados)` produz vetor de 29 features (sinais vitais + 21 flags binárias via regex sobre sintomas/histórico). Compartilhado entre treino e inferência. |
+| **Random Forest** | `rf_classifier.py` | Wrapper singleton que carrega `data/rf_model.pkl` na primeira chamada e reusa nas seguintes. Devolve cor + confiança + distribuição de probabilidades. |
 | **Protocolo** | `protocols.py` | Constantes do Manchester: cores, tempos máximos, sinais de alarme, faixas de referência e `LIMIARES_CRITICOS` usados pelas travas |
 | **Persistência** | `db.py` | Camada SQLite (zero dependências externas): `init_db`, `inserir_triagem`, `listar_fila`, `atualizar_status`. Banco em `triagens.db` |
-| **LLM (cloud)** | Groq API | Geração da classificação + justificativa em linguagem natural — resposta em &lt;1s |
-| **LLM (local)** | Ollama | Mesmo papel da Groq, mas rodando 100% offline na máquina do usuário |
-| **Avaliação** | `eval/runner.py` | Script standalone que roda 30 vinhetas clínicas (`eval/golden_set.json`) contra todos os modelos Groq, calcula acurácia e matriz de confusão |
+| **Dataset** | `data/gerar_dataset.py` | Gerador parametrizado com 50 cenários clínicos. Produz `data/triagem_dataset.csv` (2.000 linhas, distribuição realista). |
+| **Treinamento** | `data/treinar_rf.py` | Treina o `RandomForestClassifier` (300 árvores), reporta classification report + matriz de confusão + cross-validation, salva o pickle. |
+| **LLM (cloud)** | Groq API | No caminho Groq: classifica + justifica (full-LLM, &lt;1s). |
+| **LLM (local)** | Ollama | No caminho híbrido: gera APENAS a justificativa, com prompt 7× menor que o full. |
+| **Avaliação** | `eval/runner.py` | Roda 30 vinhetas clínicas (`eval/golden_set.json`) contra todos os modelos Groq e calcula acurácia + matriz de confusão. |
 
-A separação entre **frontend estático**, **backend Python**, **persistência** e **provedor LLM** desacopla a interface da lógica de IA. O mesmo `agent.py` pode ser reaproveitado em outras interfaces (CLI, mobile, integração com prontuário eletrônico) sem modificação. A troca entre Groq e Ollama acontece em runtime através de uma classe abstrata `LLMBackend` com duas implementações (`GroqBackend` e `OllamaBackend`).
+A separação entre **frontend estático**, **backend Python**, **persistência**, **classificadores (RF + LLM)** e **provedor LLM** desacopla a interface da lógica de IA. O mesmo `agent.py` pode ser reaproveitado em outras interfaces (CLI, mobile, integração com prontuário eletrônico) sem modificação. A troca entre Groq e Ollama acontece em runtime através de uma classe abstrata `LLMBackend` com duas implementações (`GroqBackend` e `OllamaBackend`), e o dispatcher escolhe o pipeline correspondente.
 
 ---
 
@@ -103,22 +134,29 @@ A separação entre **frontend estático**, **backend Python**, **persistência*
 
 ```
 manchester-ai/
-├── api.py                  # Servidor FastAPI (entry point) — endpoints /api/triagem e /api/fila
-├── agent.py                # Núcleo de IA + abstração de backend + travas determinísticas
-├── protocols.py            # Constantes Manchester: CORES, FAIXAS_REFERENCIA, LIMIARES_CRITICOS
-├── db.py                   # Camada SQLite da fila viva (sem dependências externas)
-├── triagens.db             # Banco SQLite gerado em runtime (ignorado pelo git)
+├── api.py                       # Servidor FastAPI (entry point) — /api/triagem, /api/fila, /api/warmup
+├── agent.py                     # Dispatcher + pipelines full-LLM e híbrido RF + travas determinísticas
+├── features.py                  # Extração de features (sinais vitais + 21 flags via regex)
+├── rf_classifier.py             # Wrapper singleton do RandomForestClassifier
+├── protocols.py                 # Constantes Manchester: CORES, FAIXAS_REFERENCIA, LIMIARES_CRITICOS
+├── db.py                        # Camada SQLite da fila viva (sem dependências externas)
+├── triagens.db                  # Banco SQLite gerado em runtime (ignorado pelo git)
 ├── frontend/
-│   └── index.html          # SPA com aba "Triagem" e aba "Fila" (Tailwind + Lucide + JS vanilla)
+│   └── index.html               # SPA com aba "Triagem" e aba "Fila" (Tailwind + Lucide + JS vanilla)
+├── data/
+│   ├── gerar_dataset.py         # Gerador parametrizado de casos clínicos sintéticos
+│   ├── treinar_rf.py            # Treina o RF, reporta métricas, salva o pickle
+│   ├── triagem_dataset.csv      # Dataset (2.000 linhas, 34 colunas) — pode regerar
+│   └── rf_model.pkl             # Modelo treinado (~5 MB) — re-treinar localmente
 ├── eval/
-│   ├── golden_set.json     # 30 vinhetas clínicas (6 por cor) com cor esperada
-│   ├── runner.py           # Avalia o classificador em todos os modelos Groq
-│   ├── results_*.json      # Relatórios versionados de cada execução (ignorados pelo git)
-│   └── README.md           # Como rodar e interpretar
-├── requirements.txt        # Dependências Python
-├── .env.example            # Template para a chave da API
-├── .gitignore              # Ignora .env, venv, triagens.db e eval/results_*
-└── README.md               # Este arquivo
+│   ├── golden_set.json          # 30 vinhetas clínicas (6 por cor) com cor esperada
+│   ├── runner.py                # Avalia o classificador em todos os modelos Groq
+│   ├── results_*.json           # Relatórios versionados de cada execução (ignorados pelo git)
+│   └── README.md                # Como rodar e interpretar
+├── requirements.txt             # Dependências Python
+├── .env.example                 # Template para a chave da API
+├── .gitignore                   # Ignora .env, venv, triagens.db e eval/results_*
+└── README.md                    # Este arquivo
 ```
 
 ---
@@ -235,7 +273,7 @@ Quando o venv estiver ativo, o prompt vai mudar para algo como `(venv) PS C:\Use
 pip install -r requirements.txt
 ```
 
-Isso instala 6 pacotes:
+Isso instala 8 pacotes:
 
 | Pacote | Para quê |
 |--------|----------|
@@ -245,6 +283,34 @@ Isso instala 6 pacotes:
 | `ollama` | SDK do Ollama (cliente HTTP local) |
 | `python-dotenv` | Carrega variáveis do `.env` |
 | `pydantic` | Validação automática de payloads |
+| `scikit-learn` | Random Forest do backend Ollama (classificação rápida) |
+| `pandas` | Leitura do CSV de treino e DataFrame de inferência do RF |
+
+### 5.7. Treinar o classificador Random Forest
+
+Esta etapa é **obrigatória se você for usar o backend Ollama** e **opcional se for usar só o Groq**. O modelo precisa ser treinado localmente para casar com a sua versão de scikit-learn (caso contrário aparece um `InconsistentVersionWarning`).
+
+Com o venv ativado:
+
+```powershell
+python data\treinar_rf.py
+```
+
+Em macOS/Linux:
+
+```bash
+python data/treinar_rf.py
+```
+
+O script:
+- Carrega o dataset sintético (`data/triagem_dataset.csv`) com 2.000 casos clínicos balanceados entre as 5 cores Manchester
+- Treina um `RandomForestClassifier` com 300 árvores
+- Reporta classification report + matriz de confusão + cross-validation 5-fold
+- Salva o modelo em `data/rf_model.pkl` (~5 MB)
+
+Tempo total: 10-30 segundos. Performance esperada: ~87% de acurácia, F1 ponderado ~86%.
+
+> Detalhes sobre o que o RF faz, o dataset e quando re-treinar estão na [seção 11](#11-random-forest-no-backend-ollama).
 
 ---
 
@@ -474,7 +540,127 @@ Os valores são conservadores para reduzir falsos positivos. Se quiser tornar o 
 
 ---
 
-## 11. Fila viva
+## 11. Random Forest no backend Ollama
+
+### Por que um classificador estatístico?
+
+LLMs locais pequenos (como `gemma2:2b`) são lentos: cada chamada com o `SYSTEM_PROMPT` completo (~2.000 tokens) leva 3 a 8 segundos em CPU, mesmo em máquina boa. Isso é incompatível com triagem hospitalar, onde a percepção de instantaneidade importa.
+
+A solução é dividir a responsabilidade:
+
+- **Classificação** vira tarefa de um **Random Forest** treinado offline em milhares de casos sintéticos. Inferência leva milissegundos.
+- **Justificativa em linguagem natural** continua sendo do LLM, mas com um prompt **7× menor** (`JUSTIFICATIVA_PROMPT`, ~300 tokens), porque o modelo só precisa explicar uma cor já decidida — não decidir.
+
+Resultado: latência cai de ~5s para ~1-2s mantendo XAI completa. As travas determinísticas continuam aplicadas por cima do RF, então a camada de segurança não muda.
+
+### O que é Random Forest
+
+Random Forest é um algoritmo de **ensemble learning**: em vez de uma única árvore de decisão (que tende a overfit), treina **muitas árvores em subamostras aleatórias dos dados** e dá a resposta por **votação majoritária**.
+
+Cada árvore individual aprende regras simples como "se SpO₂ < 92 e flag_dispneia=1, então LARANJA". Combinando 300 árvores treinadas em subamostras diferentes, o conjunto fica **robusto a ruído** e captura interações não-óbvias entre features (ex.: idade + temperatura + flag_febre interagindo de forma não-linear).
+
+Vantagens neste projeto:
+- **Rápido**: classifica em <50ms.
+- **Auditável**: dá `feature_importances_` (quais variáveis pesaram mais) e `predict_proba` (distribuição de probabilidade entre as 5 cores).
+- **Não precisa GPU**, roda em qualquer CPU.
+- **Tolera dados faltantes** quando preenchidos com 0 (nosso caso).
+
+Limitação principal: aprende só os padrões do dataset de treino. Se um caso real for muito diferente da distribuição sintética, ele pode errar — por isso as travas determinísticas continuam ativas.
+
+### Dataset sintético (`data/triagem_dataset.csv`)
+
+O dataset tem **2.000 linhas e 34 colunas**, gerado pelo script [data/gerar_dataset.py](data/gerar_dataset.py). Distribuição entre as cores:
+
+| Cor | Linhas | % | Justificativa |
+|-----|--------|---|---------------|
+| 🔴 VERMELHO | 200 | 10% | Boostado vs realidade (1-3% em UPAs) para o RF aprender |
+| 🟠 LARANJA  | 300 | 15% | Boostado vs realidade (5-10%) |
+| 🟡 AMARELO  | 500 | 25% | Próximo da distribuição real |
+| 🟢 VERDE    | 700 | 35% | Mais frequente em UPAs reais |
+| 🔵 AZUL     | 300 | 15% | Próximo da distribuição real |
+
+Cada linha vem de um dos **50 cenários clínicos** parametrizados (PCR, choque séptico, IAM com choque, AVC hiperagudo, trauma penetrante, anafilaxia, dor moderada, IVAS, renovação de receita, etc.). Cada cenário gera dezenas de variações com sinais vitais aleatórios dentro de faixas clinicamente coerentes e descrições de sintomas escolhidas de templates.
+
+#### Colunas
+
+```
+Originais (8):
+  idade, sexo, pressao, frequencia_cardiaca, spo2, temperatura, sintomas, historico
+
+Pré-extraídas (4):
+  pa_sistolica, pa_diastolica, sexo_M, sexo_F
+
+Flags binárias via regex sobre sintomas+histórico (21):
+  flag_dor_toracica, flag_dispneia, flag_alt_consciencia, flag_convulsao,
+  flag_hemorragia, flag_trauma_penetrante, flag_trauma_outro, flag_febre,
+  flag_dor_abdominal, flag_dor_cabeca, flag_dor_intensa, flag_gestante,
+  flag_anafilaxia, flag_pcr, flag_sepse, flag_avc, flag_iam,
+  flag_psiquiatrico, flag_vomitos, flag_diarreia, flag_administrativo
+
+Label (1):
+  classificacao (VERMELHO | LARANJA | AMARELO | VERDE | AZUL)
+```
+
+A extração das flags está em [features.py](features.py) e é reusada em produção (na inferência) — assim treino e inferência usam exatamente o mesmo pipeline.
+
+### Performance medida
+
+Usando `RandomForestClassifier(n_estimators=300, max_depth=None, min_samples_leaf=2, class_weight='balanced')`:
+
+| Métrica | Valor |
+|---|---|
+| Acurácia (holdout 20%) | ~87% |
+| F1 ponderado (5-fold CV) | ~86% ± 1,3% |
+| Recall VERMELHO | ~83% |
+| Recall AZUL | ~80% |
+| Inferência | < 50ms |
+
+A maior parte dos erros é entre cores adjacentes (AMARELO ↔ VERDE), o que é clinicamente aceitável para um SAD. As travas determinísticas pegam casos críticos que escapam (SpO₂ baixa, hipotensão grave, etc.).
+
+### Treinar/re-treinar o modelo
+
+Se você acabou de clonar o repositório e está rodando pela primeira vez, **precisa treinar o modelo localmente**, porque o `data/rf_model.pkl` deve ser gerado pela mesma versão de scikit-learn que você tem instalada (versões diferentes geram um `InconsistentVersionWarning` e podem ter resultados ligeiramente diferentes).
+
+Com o venv ativado e dependências instaladas:
+
+```powershell
+python data\gerar_dataset.py    # opcional: regera o CSV (já vem incluído no repo)
+python data\treinar_rf.py       # obrigatório se rf_model.pkl não existir ou warnings
+```
+
+A saída de `treinar_rf.py` mostra:
+- Classification report completo por cor (precision/recall/F1)
+- Matriz de confusão
+- F1 ponderado em 5-fold cross-validation
+- Confirmação do caminho onde o pickle foi salvo
+
+Tempo total: 10-30 segundos numa máquina razoável.
+
+### Quando re-treinar
+
+- **Primeira vez** após clonar o repositório (modelo deve casar com sua versão local de scikit-learn).
+- **Após editar `data/gerar_dataset.py`** (novos cenários, distribuição diferente, etc.).
+- **Após editar `features.py`** (novos regex de flags, mudança de feature engineering).
+- **Após atualizar scikit-learn** (`pip install --upgrade scikit-learn`).
+
+Se o modelo não estiver presente quando o backend Ollama for selecionado, o sistema cai automaticamente no fluxo full-LLM como fallback transparente — sem quebra para o usuário.
+
+### Estender o dataset com casos reais
+
+Se você tiver acesso a casos clínicos reais (com consentimento e aprovação ética), pode adicioná-los ao CSV manualmente respeitando o formato das colunas, e re-treinar:
+
+```python
+import pandas as pd
+df = pd.read_csv('data/triagem_dataset.csv')
+# adicione suas linhas aqui...
+df.to_csv('data/triagem_dataset.csv', index=False)
+```
+
+Depois rode `python data/treinar_rf.py` para incorporar os novos exemplos. **Não substitua o CSV inteiro** — mantenha o sintético como base para garantir cobertura de cenários raros.
+
+---
+
+## 12. Fila viva
 
 Toda triagem é persistida automaticamente em SQLite (`triagens.db` na raiz do projeto). A camada de persistência está em [db.py](db.py) e usa apenas a biblioteca `sqlite3` built-in do Python — nenhuma dependência externa adicional.
 
@@ -500,7 +686,7 @@ sqlite3 triagens.db "SELECT id, criado_em, classificacao, status FROM triagens O
 
 ---
 
-## 12. Avaliação com golden set
+## 13. Avaliação com golden set
 
 O diretório `eval/` contém um conjunto fixo de 30 vinhetas clínicas (6 por cor Manchester) e um runner que mede a qualidade do classificador.
 
@@ -534,7 +720,7 @@ Detalhes completos em [eval/README.md](eval/README.md).
 
 ---
 
-## 13. Resolução de problemas comuns
+## 14. Resolução de problemas comuns
 
 ### "Python was not found" no Windows
 
@@ -571,6 +757,25 @@ Veja a [seção 5.3](#53-apenas-windows-liberar-execução-de-scripts-no-powersh
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
+
+### `InconsistentVersionWarning: Trying to unpickle estimator from version X.Y.Z when using version A.B.C`
+
+**Causa:** O `data/rf_model.pkl` foi treinado com uma versão de scikit-learn diferente da que você tem instalada (típico depois de clonar o repo ou atualizar o sklearn).
+
+**Solução:** Re-treine localmente com a sua versão atual:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python data\treinar_rf.py
+```
+
+Demora ~10-30s e o pickle é sobrescrito sem problema. Detalhes na [seção 11](#11-random-forest-no-backend-ollama).
+
+### "Modelo Random Forest nao encontrado em data/rf_model.pkl"
+
+**Causa:** O backend Ollama foi selecionado mas você ainda não treinou o RF.
+
+**Solução:** Rode `python data\treinar_rf.py`. Enquanto não treinar, o sistema cai automaticamente no fluxo full-LLM como fallback (mais lento mas funcional).
 
 ### "GROQ_API_KEY não configurada"
 
@@ -617,7 +822,7 @@ Provavelmente seu navegador bloqueou o CDN do Tailwind (rede corporativa, ad-blo
 
 ---
 
-## 14. Protocolo de Manchester
+## 15. Protocolo de Manchester
 
 | Cor          | Tempo máximo | Significado                            |
 |--------------|--------------|----------------------------------------|
@@ -631,7 +836,7 @@ A classificação considera os sinais vitais informados (frequência cardíaca, 
 
 ---
 
-## 15. Limitações conhecidas
+## 16. Limitações conhecidas
 
 - **Não substitui avaliação médica.** É uma prova de conceito acadêmica, não um produto médico aprovado.
 - **Sem exame físico.** O sistema trabalha apenas com a descrição verbal e os sinais vitais informados pelo enfermeiro.

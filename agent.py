@@ -2,9 +2,14 @@
 Agente de Triagem Médica - núcleo da decisão.
 
 Implementa abstração de backend LLM para alternar entre Groq (cloud) e
-Ollama (local) com uma única troca de configuração. A saída é estruturada
-em JSON para garantir parse robusto e explicabilidade (XAI) do raciocínio
-clínico do modelo.
+Ollama (local) com uma única troca de configuração.
+
+- Backend Groq: o LLM faz a classificação completa (full-LLM flow).
+- Backend Ollama: pipeline híbrido — Random Forest classifica em ms e o
+  LLM local gera apenas a justificativa em linguagem natural.
+
+A saída é sempre estruturada em JSON para garantir parse robusto e
+explicabilidade (XAI) do raciocínio clínico.
 """
 
 from __future__ import annotations
@@ -162,6 +167,29 @@ Confiança BAIXA = dados insuficientes — sempre inclua perguntas_adicionais ne
 
 
 # ---------------------------------------------------------------------------
+# Prompt enxuto usado no fluxo hibrido (RF + LLM apenas para justificativa)
+# ---------------------------------------------------------------------------
+# Usado quando o backend e Ollama: o Random Forest ja classificou o paciente
+# em milissegundos e o LLM local apenas precisa explicar a decisao em
+# linguagem natural. O prompt fica ~7x menor que o SYSTEM_PROMPT completo,
+# o que e critico para reduzir a latencia de modelos pequenos como gemma2:2b.
+JUSTIFICATIVA_PROMPT = """Você é um enfermeiro experiente em triagem segundo o Protocolo de Manchester.
+
+Um classificador estatístico (Random Forest treinado em casos similares) já analisou este paciente e atribuiu a cor: **{cor}** (confiança {confianca_rf}).
+
+Sua tarefa: gerar uma JUSTIFICATIVA CLÍNICA AUDITÁVEL (2-4 frases) para essa classificação, citando os dados específicos do paciente que sustentam a decisão. Você NÃO deve mudar a cor — apenas explicá-la.
+
+Liste também sinais de alerta identificados e perguntas adicionais que o triador deveria fazer ao paciente, se relevantes.
+
+Responda APENAS no formato JSON, sem markdown, sem texto antes ou depois:
+{{
+  "justificativa": "explicação clínica de 2-4 frases citando dados específicos do paciente",
+  "sinais_alerta": ["lista de sinais identificados ou vazio"],
+  "perguntas_adicionais": ["perguntas que o triador deveria fazer ou vazio"]
+}}"""
+
+
+# ---------------------------------------------------------------------------
 # Resultado tipado da triagem
 # ---------------------------------------------------------------------------
 @dataclass
@@ -174,8 +202,8 @@ class TriagemResult:
     raw_response: str = ""
     erro: str = ""
     # Campos preenchidos pelas travas determinísticas. classificacao_llm guarda
-    # o que o LLM havia respondido antes de qualquer override; classificacao
-    # acima é sempre a final exibida ao usuário.
+    # o que o LLM (ou o RF, no fluxo híbrido) havia respondido antes de
+    # qualquer override; classificacao acima é sempre a final exibida.
     classificacao_llm: str = ""
     inconsistencia: bool = False
     cor_regra: str | None = None
@@ -243,6 +271,9 @@ class OllamaBackend(LLMBackend):
         self.client = ollama.Client(host=host)
         self.model = model
         self.host = host
+        # Threads de CPU dedicadas ao decode. Em CPU mode (sem GPU) isto
+        # acelera muito; em GPU mode o Ollama ignora.
+        self.num_thread = max(1, (os.cpu_count() or 4) - 1)
 
     @property
     def name(self) -> str:
@@ -256,9 +287,41 @@ class OllamaBackend(LLMBackend):
                 {"role": "user", "content": user},
             ],
             format="json",
-            options={"temperature": 0.2, "num_predict": 1024},
+            options={
+                "temperature": 0.2,
+                # Justificativa cabe em <300 tokens. 384 deixa margem para
+                # JSONs com varios sinais_alerta sem desperdicar tempo
+                # gerando tokens que serao truncados.
+                "num_predict": 384,
+                "num_thread": self.num_thread,
+                # Prompt deterministicamente curto: nao precisa de top_k
+                # alto. Reduz o tempo de amostragem por token.
+                "top_k": 20,
+            },
+            # Mantem o modelo carregado na memoria por 30 minutos apos a
+            # ultima chamada. Sem isso, o Ollama descarrega em 5min e a
+            # proxima chamada paga +3-5s para recarregar.
+            keep_alive="30m",
         )
         return resp["message"]["content"]
+
+    def warmup(self) -> None:
+        """
+        Forca o Ollama a carregar o modelo em memoria sem gerar resposta
+        completa. Chamado no startup do servidor para que a primeira
+        triagem real do usuario nao pague o custo de cold start.
+        """
+        try:
+            self.client.chat(
+                model=self.model,
+                messages=[{"role": "user", "content": "ok"}],
+                options={"num_predict": 1},
+                keep_alive="30m",
+            )
+        except Exception:
+            # Falha silenciosa: o servidor nao deve cair so porque o
+            # warmup nao funcionou (Ollama pode nao estar rodando ainda).
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -355,8 +418,15 @@ def _avaliar_travas(dados: dict) -> tuple[str | None, list[str]]:
     return cor_mais_grave, [texto for _, texto in motivos]
 
 
-def classificar(dados: dict, backend: LLMBackend) -> TriagemResult:
-    """Executa a triagem completa: chama o LLM e devolve resultado estruturado."""
+# ---------------------------------------------------------------------------
+# Fluxo classico: LLM faz tudo (usado pelo Groq)
+# ---------------------------------------------------------------------------
+def _classificar_full_llm(dados: dict, backend: LLMBackend) -> TriagemResult:
+    """
+    Fluxo classico: o LLM faz tudo (classificacao + justificativa).
+    Usado para backend Groq (cloud, rapido) ou como fallback do Ollama
+    quando o RF nao esta treinado.
+    """
     user_prompt = build_prompt(dados)
 
     # Etapa 1: chamada ao LLM
@@ -420,6 +490,118 @@ def classificar(dados: dict, backend: LLMBackend) -> TriagemResult:
         cor_regra=cor_regra,
         motivos_regra=motivos,
     )
+
+
+# ---------------------------------------------------------------------------
+# Fluxo hibrido: Random Forest + LLM apenas para justificativa (Ollama)
+# ---------------------------------------------------------------------------
+def _classificar_hibrido_rf(dados: dict, backend: LLMBackend) -> TriagemResult:
+    """
+    Pipeline rapido para backend Ollama: o RandomForest classifica em
+    milissegundos e o LLM local gera apenas a justificativa em linguagem
+    natural. Isso evita o gargalo do prompt completo (~2k tokens) em
+    modelos pequenos como gemma2:2b.
+
+    As travas deterministicas (LIMIARES_CRITICOS) continuam aplicadas por
+    cima do RF, exatamente como no fluxo full-LLM.
+    """
+    # Import lazy: rf_classifier importa scikit-learn, que e pesado. So
+    # carrega quando o usuario realmente escolhe Ollama.
+    from rf_classifier import RFNaoTreinadoError, get_rf
+
+    # Etapa 1: classificacao via Random Forest
+    try:
+        rf_out = get_rf().predict(dados)
+    except RFNaoTreinadoError:
+        # Modelo nao treinado: cai no fluxo full-LLM como fallback transparente.
+        return _classificar_full_llm(dados, backend)
+    except Exception as e:
+        return TriagemResult(
+            classificacao="ERRO",
+            justificativa=f"Falha ao executar Random Forest local: {e}",
+            erro=str(e),
+        )
+
+    cor_rf: str = rf_out["classificacao"]
+    confianca_rf: str = rf_out["confianca"]
+
+    # Etapa 2: travas deterministicas (mesma logica do fluxo full-LLM)
+    cor_regra, motivos = _avaliar_travas(dados)
+    classificacao_final = cor_rf
+    inconsistencia = False
+    if cor_regra and cor_rf in ORDEM_GRAVIDADE:
+        if ORDEM_GRAVIDADE.index(cor_regra) > ORDEM_GRAVIDADE.index(cor_rf):
+            classificacao_final = cor_regra
+            inconsistencia = True
+
+    # Etapa 3: LLM gera APENAS a justificativa (prompt ~7x menor)
+    justif_prompt = JUSTIFICATIVA_PROMPT.format(
+        cor=classificacao_final, confianca_rf=confianca_rf
+    )
+    user_prompt = build_prompt(dados)
+
+    try:
+        raw = backend.chat(justif_prompt, user_prompt)
+    except Exception as e:
+        # LLM falhou mas a classificacao ja existe: devolvemos resultado
+        # parcialmente degradado em vez de falhar a triagem inteira.
+        return TriagemResult(
+            classificacao=classificacao_final,
+            classificacao_llm=cor_rf,
+            justificativa=(
+                f"Classificacao determinada por Random Forest com confianca {confianca_rf}. "
+                f"Justificativa em linguagem natural indisponivel: {e}"
+            ),
+            confianca=confianca_rf,
+            cor_regra=cor_regra,
+            motivos_regra=motivos,
+            inconsistencia=inconsistencia,
+            erro=str(e),
+        )
+
+    # Parse tolerante (LLMs pequenos as vezes embrulham JSON em markdown)
+    try:
+        parsed = _parse_response(raw)
+    except json.JSONDecodeError:
+        parsed = {}
+
+    justificativa = parsed.get("justificativa") or (
+        f"Random Forest classificou como {cor_rf} (confianca {confianca_rf}) "
+        "com base nos sinais vitais e descricao dos sintomas."
+    )
+
+    return TriagemResult(
+        classificacao=classificacao_final,
+        # Nesta variante, classificacao_llm guarda a saida do RF (que e o
+        # "modelo" pre-trava). O nome do campo permanece para nao quebrar
+        # o contrato de TriagemResponse na API.
+        classificacao_llm=cor_rf,
+        justificativa=justificativa,
+        sinais_alerta=parsed.get("sinais_alerta") or [],
+        perguntas_adicionais=parsed.get("perguntas_adicionais") or [],
+        confianca=confianca_rf,
+        raw_response=raw,
+        cor_regra=cor_regra,
+        motivos_regra=motivos,
+        inconsistencia=inconsistencia,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dispatcher publico
+# ---------------------------------------------------------------------------
+def classificar(dados: dict, backend: LLMBackend) -> TriagemResult:
+    """
+    Dispatcher publico do agente.
+
+    - Backend Groq (cloud, < 1s): usa o LLM para tudo (classificacao + justificativa).
+    - Backend Ollama (local): usa o pipeline hibrido RF + LLM apenas para
+      justificativa, reduzindo drasticamente a latencia em modelos pequenos.
+      Se o RF nao estiver treinado, cai no fluxo full-LLM como fallback.
+    """
+    if isinstance(backend, OllamaBackend):
+        return _classificar_hibrido_rf(dados, backend)
+    return _classificar_full_llm(dados, backend)
 
 
 # ---------------------------------------------------------------------------
