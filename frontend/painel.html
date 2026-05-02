@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel de Chamada · Triagem Clínica</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: #0f172a;
+      color: #f8fafc;
+      overflow: hidden;
+    }
+    .glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 60px 0px rgba(255,255,255,0.25), inset 0 0 80px rgba(255,255,255,0.05); }
+      50%      { box-shadow: 0 0 100px 10px rgba(255,255,255,0.45), inset 0 0 120px rgba(255,255,255,0.10); }
+    }
+    .reveal-name { animation: revealName 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes revealName {
+      from { opacity: 0; transform: scale(0.92) translateY(20px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    /* Pulse forte no card quando uma nova chamada (ou rechamada) chega.
+       Ficou DENTRO do card pra não piscar a tela inteira. */
+    .new-call-pulse { animation: newCallPulse 0.9s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes newCallPulse {
+      0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,255,255,0.6); }
+      30%  { transform: scale(1.03); box-shadow: 0 0 80px 30px rgba(255,255,255,0.5); }
+      100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+    /* Esconde cursor depois de inatividade — modo TV */
+    .hide-cursor { cursor: none; }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+  <!-- ========================================================== -->
+  <!-- TELA DE BOAS-VINDAS (precisa de click pra liberar TTS)     -->
+  <!-- ========================================================== -->
+  <div id="welcome" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900">
+    <div class="text-center max-w-2xl px-8">
+      <div class="mx-auto h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-2xl mb-8">
+        <i data-lucide="monitor-play" style="width:36px;height:36px" class="text-white"></i>
+      </div>
+      <h1 class="text-5xl font-extrabold tracking-tight mb-4">Painel de Chamada</h1>
+      <p class="text-xl text-slate-400 mb-10 leading-relaxed">
+        Sistema de triagem · Protocolo de Manchester<br/>
+        Clique para iniciar o painel em tela cheia.
+      </p>
+      <button id="start-btn"
+        class="inline-flex items-center gap-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 px-10 py-5 text-2xl font-bold transition-all shadow-2xl hover:scale-105 active:scale-100">
+        <i data-lucide="play-circle" style="width:32px;height:32px"></i>
+        Iniciar Painel
+      </button>
+      <div class="mt-6 flex items-center justify-center gap-2 text-sm text-slate-500">
+        <i data-lucide="info" style="width:16px;height:16px"></i>
+        <span>O áudio das chamadas só funciona após esta interação inicial.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- HEADER                                                     -->
+  <!-- ========================================================== -->
+  <header class="px-10 py-5 flex items-center justify-between border-b border-slate-800 bg-slate-950/50">
+    <div class="flex items-center gap-4">
+      <div class="h-12 w-12 rounded-xl bg-indigo-600 flex items-center justify-center">
+        <i data-lucide="activity" style="width:24px;height:24px" class="text-white"></i>
+      </div>
+      <div>
+        <div class="text-2xl font-bold tracking-tight">Painel de Chamada</div>
+        <div class="text-sm text-slate-400 font-medium">Triagem Clínica · Manchester</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-6">
+      <button id="audio-toggle"
+        class="inline-flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors"
+        title="Voz: chama o nome do paciente. Desligada: toca apenas um beep.">
+        <i data-lucide="volume-2" style="width:18px;height:18px" id="audio-icon"></i>
+        <span id="audio-label">Voz: ON</span>
+      </button>
+      <div class="text-right">
+        <div id="clock" class="text-4xl font-bold tabular-nums leading-none">--:--:--</div>
+        <div id="date" class="text-sm text-slate-400 font-medium mt-1">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================== -->
+  <!-- MAIN: chamada atual + listas                               -->
+  <!-- ========================================================== -->
+  <main class="flex-1 flex flex-col px-10 py-8 gap-8 overflow-hidden">
+
+    <!-- CHAMADA ATUAL (zona principal, ~60% da tela) -->
+    <section class="flex-1 flex flex-col items-center justify-center">
+      <div class="text-sm font-bold uppercase tracking-[0.3em] text-slate-500 mb-6">
+        CHAMANDO AGORA
+      </div>
+
+      <!-- Empty state -->
+      <div id="chamada-empty" class="text-center">
+        <div class="mx-auto h-32 w-32 rounded-full bg-slate-800/50 border-2 border-slate-700 flex items-center justify-center mb-8">
+          <i data-lucide="users-round" style="width:64px;height:64px" class="text-slate-600"></i>
+        </div>
+        <div class="text-5xl font-bold text-slate-500 mb-3">Aguardando chamadas</div>
+        <div class="text-xl text-slate-600">Nenhum paciente sendo chamado no momento.</div>
+      </div>
+
+      <!-- Chamada com paciente -->
+      <div id="chamada-card" class="hidden w-full max-w-5xl rounded-3xl p-12 text-center glow-pulse"
+           style="background: rgba(0,0,0,0.3); border: 4px solid rgba(255,255,255,0.2);">
+        <div id="chamada-nome" class="reveal-name text-[10rem] font-black tracking-tight leading-none mb-6">—</div>
+        <div class="flex items-center justify-center gap-6 flex-wrap">
+          <div id="chamada-cor" class="inline-flex items-center gap-3 rounded-2xl px-8 py-4 text-3xl font-bold">
+            <span id="chamada-icone" class="text-4xl">—</span>
+            <span id="chamada-cor-nome">—</span>
+          </div>
+          <div id="chamada-tempo" class="text-2xl font-semibold opacity-80">—</div>
+        </div>
+        <div id="chamada-extra" class="mt-6 text-xl opacity-75 font-medium">—</div>
+      </div>
+    </section>
+
+    <!-- DUAS COLUNAS: próximos + últimos atendidos -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6 h-[28%]">
+      <!-- Próximos -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 flex flex-col overflow-hidden">
+        <div class="flex items-center gap-3 mb-4">
+          <i data-lucide="list-ordered" style="width:24px;height:24px" class="text-indigo-400"></i>
+          <h2 class="text-xl font-bold tracking-tight">Próximos a chamar</h2>
+          <span id="proximos-count" class="ml-auto text-sm font-bold text-slate-500 tabular-nums">0</span>
+        </div>
+        <div id="proximos-list" class="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div id="proximos-empty" class="flex items-center justify-center h-full text-slate-600 text-base">
+            Nenhum paciente aguardando.
+          </div>
+        </div>
+      </div>
+
+      <!-- Últimos atendidos -->
+      <div class="rounded-2xl bg-slate-900/60 border border-slate-800 p-6 flex flex-col overflow-hidden">
+        <div class="flex items-center gap-3 mb-4">
+          <i data-lucide="check-circle-2" style="width:24px;height:24px" class="text-emerald-400"></i>
+          <h2 class="text-xl font-bold tracking-tight">Últimos atendidos</h2>
+        </div>
+        <div id="atendidos-list" class="flex-1 overflow-y-auto space-y-2 pr-1">
+          <div id="atendidos-empty" class="flex items-center justify-center h-full text-slate-600 text-base">
+            Nenhum atendimento finalizado.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================================== -->
+  <!-- FOOTER                                                     -->
+  <!-- ========================================================== -->
+  <footer class="px-10 py-3 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between text-xs text-slate-500">
+    <div>Sistema de triagem · Manchester · URI</div>
+    <div id="status-indicator" class="flex items-center gap-2">
+      <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span>Atualizando a cada 3s</span>
+    </div>
+  </footer>
+
+  <!-- ========================================================== -->
+  <!-- JAVASCRIPT                                                 -->
+  <!-- ========================================================== -->
+  <script>
+  const $ = (sel) => document.querySelector(sel);
+
+  let audioOn = (localStorage.getItem('painel_audio') ?? '1') === '1';
+  let lastChamadoKey = null;  // "id|chamado_em" — muda a cada nova chamada
+  let pollInterval = null;
+  let cursorTimeout = null;
+
+  // ----------------------------------------------------------------
+  // Relógio
+  // ----------------------------------------------------------------
+  const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  function tickClock() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    $('#clock').textContent = `${hh}:${mm}:${ss}`;
+    $('#date').textContent = `${DIAS[now.getDay()]}, ${now.getDate()} ${MESES[now.getMonth()]} ${now.getFullYear()}`;
+  }
+
+  // ----------------------------------------------------------------
+  // Áudio de chamada — voz (TTS) ou beep, conforme o toggle
+  // ----------------------------------------------------------------
+  let cachedVoices = [];
+  let audioCtx = null;
+
+  function loadVoices() {
+    if (!window.speechSynthesis) return;
+    cachedVoices = window.speechSynthesis.getVoices();
+  }
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioCtx = new Ctx();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+
+  // Beep de notificação hospitalar: dois tons curtos (ding-dong) com
+  // envelope ADSR suave para não soar agressivo.
+  function playBeep() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const tones = [
+      { freq: 880,  start: 0.00, duration: 0.18 },  // A5
+      { freq: 1175, start: 0.22, duration: 0.22 },  // D6
+    ];
+    tones.forEach(({ freq, start, duration }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t0 = now + start;
+      const tEnd = t0 + duration;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.35, t0 + 0.025);              // attack
+      gain.gain.linearRampToValueAtTime(0.30, tEnd - 0.06);             // sustain
+      gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);             // release
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(tEnd + 0.02);
+    });
+  }
+
+  function speakChamada(nome, cor) {
+    if (!window.speechSynthesis) {
+      playBeep();  // fallback se browser não suporta TTS
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      const texto = `Paciente ${nome}. Classificação ${cor.toLowerCase()}. Por favor, dirija-se ao consultório.`;
+      const utt = new SpeechSynthesisUtterance(texto);
+      utt.lang = 'pt-BR';
+      utt.rate = 0.95;
+      utt.pitch = 1.0;
+      utt.volume = 1.0;
+      if (cachedVoices.length === 0) loadVoices();
+      const ptVoice = cachedVoices.find(v => v.lang === 'pt-BR')
+                    || cachedVoices.find(v => v.lang.startsWith('pt'))
+                    || cachedVoices.find(v => /portuguese|brasil/i.test(v.name));
+      if (ptVoice) utt.voice = ptVoice;
+      window.speechSynthesis.speak(utt);
+    } catch {
+      playBeep();
+    }
+  }
+
+  // Dispatcher: voz ON → fala o nome; voz OFF → toca beep
+  function tocarChamada(nome, cor) {
+    if (audioOn) {
+      speakChamada(nome, cor);
+    } else {
+      playBeep();
+    }
+  }
+
+  function setupAudioToggle() {
+    const btn = $('#audio-toggle'),
+          icon = $('#audio-icon'),
+          label = $('#audio-label');
+    function render() {
+      if (audioOn) {
+        icon.setAttribute('data-lucide', 'volume-2');
+        label.textContent = 'Voz: ON';
+        btn.className = 'inline-flex items-center gap-2 rounded-lg bg-emerald-700/40 hover:bg-emerald-700/60 px-4 py-2 text-sm font-semibold text-emerald-200 transition-colors';
+      } else {
+        icon.setAttribute('data-lucide', 'volume-x');
+        label.textContent = 'Voz: OFF';
+        btn.className = 'inline-flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors';
+      }
+      lucide.createIcons();
+    }
+    render();
+    btn.addEventListener('click', () => {
+      audioOn = !audioOn;
+      localStorage.setItem('painel_audio', audioOn ? '1' : '0');
+      if (!audioOn && window.speechSynthesis) window.speechSynthesis.cancel();
+      render();
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Render do painel
+  // ----------------------------------------------------------------
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+      .replaceAll('"','&quot;').replaceAll("'", '&#039;');
+  }
+
+  function nomePaciente(item) {
+    const n = (item.paciente_nome || '').trim();
+    if (n) return n;
+    return `Paciente #${item.id}`;
+  }
+
+  function tempoEsperaTexto(criadoEm) {
+    if (!criadoEm) return '—';
+    const inicio = new Date(criadoEm);
+    const diff = Math.max(0, Math.floor((Date.now() - inicio.getTime()) / 60000));
+    if (diff < 60) return `Aguardando há ${diff} min`;
+    const h = Math.floor(diff / 60), m = diff % 60;
+    return `Aguardando há ${h}h${String(m).padStart(2, '0')}`;
+  }
+
+  function renderChamadaAtual(item) {
+    const empty = $('#chamada-empty'), card = $('#chamada-card');
+    if (!item) {
+      empty.classList.remove('hidden');
+      card.classList.add('hidden');
+      lastChamadoKey = null;
+      return;
+    }
+    empty.classList.add('hidden');
+    card.classList.remove('hidden');
+
+    const cor = item.cor_info || {};
+    card.style.backgroundColor = cor.hex_fundo || '#475569';
+    card.style.color = cor.hex_texto || '#fff';
+
+    $('#chamada-nome').textContent = nomePaciente(item);
+    $('#chamada-icone').textContent = cor.icone || '';
+    $('#chamada-cor-nome').textContent = item.classificacao || '';
+    $('#chamada-tempo').textContent = (cor.tempo_max != null && cor.tempo_max >= 0)
+      ? `Atendimento em até ${cor.tempo_max} min`
+      : '';
+    $('#chamada-extra').textContent = item.idade
+      ? `${item.idade} anos · ${item.sexo || 'Não informado'}`
+      : '';
+
+    // Chave composta: id + timestamp da chamada. Muda quando o paciente
+    // troca OU quando o mesmo paciente é chamado de novo (chamado_em é
+    // atualizado a cada clique no botão "Chamar de novo").
+    const chamadaKey = `${item.id}|${item.chamado_em || ''}`;
+    if (chamadaKey !== lastChamadoKey) {
+      // Re-trigga animação do nome (entrada com fade-up)
+      $('#chamada-nome').classList.remove('reveal-name');
+      void $('#chamada-nome').offsetWidth;  // força reflow
+      $('#chamada-nome').classList.add('reveal-name');
+
+      // Pulse forte no card (sutil, não pisca o fundo da tela)
+      card.classList.remove('new-call-pulse');
+      void card.offsetWidth;
+      card.classList.add('new-call-pulse');
+
+      // Áudio (voz ou beep) só se a chamada é recente (<60s). Isso evita
+      // repetir áudio quando o painel é reaberto e pega uma chamada antiga.
+      const chamadoEm = new Date(item.chamado_em).getTime();
+      const segundosDesdeChamada = (Date.now() - chamadoEm) / 1000;
+      if (Number.isFinite(segundosDesdeChamada) && segundosDesdeChamada < 60) {
+        tocarChamada(nomePaciente(item), item.classificacao || '');
+      }
+      lastChamadoKey = chamadaKey;
+    }
+  }
+
+  function renderProximos(items) {
+    const wrap = $('#proximos-list'), empty = $('#proximos-empty'), count = $('#proximos-count');
+    count.textContent = items.length;
+    wrap.querySelectorAll('.prox-item').forEach(el => el.remove());
+    if (items.length === 0) { empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    items.forEach((item) => {
+      const cor = item.cor_info || {};
+      const div = document.createElement('div');
+      div.className = 'prox-item flex items-center gap-4 rounded-xl bg-slate-800/50 border border-slate-700/50 px-4 py-3';
+      div.innerHTML = `
+        <div class="h-10 w-10 rounded-lg flex items-center justify-center text-xl font-bold shrink-0"
+             style="background:${cor.hex_fundo || '#64748b'}; color:${cor.hex_texto || '#fff'}">
+          ${cor.icone || ''}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-lg font-bold truncate">${escapeHtml(nomePaciente(item))}</div>
+          <div class="text-xs text-slate-400 font-medium">${escapeHtml(item.classificacao)} · ${escapeHtml(tempoEsperaTexto(item.criado_em))}</div>
+        </div>
+      `;
+      wrap.appendChild(div);
+    });
+  }
+
+  function renderAtendidos(items) {
+    const wrap = $('#atendidos-list'), empty = $('#atendidos-empty');
+    wrap.querySelectorAll('.atend-item').forEach(el => el.remove());
+    if (items.length === 0) { empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    items.forEach((item) => {
+      const cor = item.cor_info || {};
+      const div = document.createElement('div');
+      div.className = 'atend-item flex items-center gap-4 rounded-xl bg-slate-800/30 border border-slate-700/30 px-4 py-3';
+      div.innerHTML = `
+        <div class="h-10 w-10 rounded-lg flex items-center justify-center text-xl shrink-0"
+             style="background:${cor.hex_fundo || '#64748b'}40; color:${cor.hex_fundo || '#94a3b8'}">
+          ✓
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-lg font-semibold truncate text-slate-300">${escapeHtml(nomePaciente(item))}</div>
+          <div class="text-xs text-slate-500 font-medium">${escapeHtml(item.classificacao)}</div>
+        </div>
+      `;
+      wrap.appendChild(div);
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Polling
+  // ----------------------------------------------------------------
+  async function fetchPainel() {
+    try {
+      const r = await fetch('/api/painel');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      renderChamadaAtual(data.chamada_atual);
+      renderProximos(data.proximos || []);
+      renderAtendidos(data.ultimos_atendidos || []);
+    } catch (err) {
+      console.warn('Falha ao buscar painel:', err);
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Cursor auto-hide (modo TV)
+  // ----------------------------------------------------------------
+  function resetCursorTimeout() {
+    document.body.classList.remove('hide-cursor');
+    if (cursorTimeout) clearTimeout(cursorTimeout);
+    cursorTimeout = setTimeout(() => document.body.classList.add('hide-cursor'), 3000);
+  }
+  document.addEventListener('mousemove', resetCursorTimeout);
+
+  // ----------------------------------------------------------------
+  // Bootstrap
+  // ----------------------------------------------------------------
+  function startPainel() {
+    $('#welcome').remove();
+    // Tenta entrar em fullscreen (alguns navegadores exigem gesto do user)
+    try { document.documentElement.requestFullscreen?.(); } catch {}
+
+    // Inicializa TTS: carrega vozes + escuta evento voiceschanged
+    if (window.speechSynthesis) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      // Utterance quase mudo pra "destravar" o engine TTS no primeiro gesto
+      const warm = new SpeechSynthesisUtterance(' ');
+      warm.volume = 0.01;
+      window.speechSynthesis.speak(warm);
+    }
+
+    // Inicializa AudioContext (necessário pro beep). O navegador exige
+    // que isso aconteça dentro de um gesto do usuário (clique). Se ficar
+    // suspended, o resume() em getAudioCtx() reabre na primeira chamada.
+    getAudioCtx();
+
+    tickClock();
+    setInterval(tickClock, 1000);
+    fetchPainel();
+    pollInterval = setInterval(fetchPainel, 3000);
+    resetCursorTimeout();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    lucide.createIcons();
+    setupAudioToggle();
+    $('#start-btn').addEventListener('click', startPainel);
+  });
+  </script>
+</body>
+</html>

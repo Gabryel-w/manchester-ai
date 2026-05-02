@@ -127,10 +127,18 @@ class FilaItem(BaseModel):
     status: str
     tempo_max_min: int
     cor_info: dict
+    chamado_em: str | None = None
 
 
 class FilaUpdateRequest(BaseModel):
     status: Literal["aguardando", "atendido", "dispensado"]
+
+
+class PainelResponse(BaseModel):
+    chamada_atual: FilaItem | None = None
+    proximos: list[FilaItem] = []
+    ultimos_atendidos: list[FilaItem] = []
+    server_time: str  # ISO timestamp para o frontend sincronizar relógio
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +289,7 @@ def _to_fila_item(row: dict) -> FilaItem:
         status=row["status"],
         tempo_max_min=int(cor_info.get("tempo_max", -1)),
         cor_info=cor_info,
+        chamado_em=row.get("chamado_em"),
     )
 
 
@@ -301,6 +310,56 @@ def atualizar_fila(triagem_id: int, req: FilaUpdateRequest):
     if not rows:
         raise HTTPException(status_code=404, detail="Triagem não encontrada após update.")
     return _to_fila_item(rows[0])
+
+
+# ---------------------------------------------------------------------------
+# Painel de chamada (modo TV)
+# ---------------------------------------------------------------------------
+@app.post("/api/fila/{triagem_id}/chamar", response_model=FilaItem)
+def chamar_paciente_endpoint(triagem_id: int):
+    """Chama um paciente especifico (modo manual). Marca chamado_em = now."""
+    row = db.chamar_paciente(triagem_id)
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Triagem nao encontrada ou paciente nao esta aguardando.",
+        )
+    return _to_fila_item(row)
+
+
+@app.post("/api/fila/chamar-proximo", response_model=FilaItem | None)
+def chamar_proximo_endpoint():
+    """Chama automaticamente o proximo paciente da fila por prioridade Manchester."""
+    row = db.chamar_proximo()
+    if not row:
+        return None
+    return _to_fila_item(row)
+
+
+@app.get("/api/painel", response_model=PainelResponse)
+def painel_dados():
+    """Devolve os dados otimizados para o painel publico de chamada."""
+    from datetime import datetime, timezone
+
+    dados = db.dados_painel()
+    return PainelResponse(
+        chamada_atual=_to_fila_item(dados["chamada_atual"]) if dados["chamada_atual"] else None,
+        proximos=[_to_fila_item(r) for r in dados["proximos"]],
+        ultimos_atendidos=[_to_fila_item(r) for r in dados["ultimos_atendidos"]],
+        server_time=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+
+
+@app.get("/painel")
+def painel_page():
+    """Serve a pagina do painel publico (modo TV)."""
+    painel = FRONTEND_DIR / "painel.html"
+    if not painel.exists():
+        raise HTTPException(
+            status_code=500,
+            detail="Arquivo frontend/painel.html nao encontrado.",
+        )
+    return FileResponse(painel)
 
 
 # ---------------------------------------------------------------------------

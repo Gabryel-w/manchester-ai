@@ -77,11 +77,14 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_triagens_status ON triagens(status)"
         )
-        # Migração in-place: adiciona paciente_nome em bancos antigos (criados
-        # antes da feature). ALTER TABLE ADD COLUMN é não destrutivo no SQLite.
+        # Migração in-place: ALTER TABLE ADD COLUMN é não destrutivo no SQLite.
         cols = {row[1] for row in conn.execute("PRAGMA table_info(triagens)").fetchall()}
         if "paciente_nome" not in cols:
             conn.execute("ALTER TABLE triagens ADD COLUMN paciente_nome TEXT")
+        # Coluna usada pelo painel de chamada: timestamp ISO da última vez que
+        # o paciente foi chamado. NULL = ainda não chamado.
+        if "chamado_em" not in cols:
+            conn.execute("ALTER TABLE triagens ADD COLUMN chamado_em TEXT")
 
 
 def inserir_triagem(payload: dict[str, Any]) -> int:
@@ -174,3 +177,96 @@ def atualizar_status(triagem_id: int, novo_status: str) -> bool:
             (novo_status, agora, triagem_id),
         )
         return cursor.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Painel de chamada
+# ---------------------------------------------------------------------------
+def chamar_paciente(triagem_id: int) -> dict[str, Any] | None:
+    """Marca um paciente especifico como chamado (modo manual).
+
+    Grava o timestamp atual em chamado_em. Devolve o registro atualizado ou
+    None se o id nao existir / nao estiver aguardando.
+    """
+    agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _conn() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE triagens
+               SET chamado_em = ?, atualizado_em = ?
+             WHERE id = ? AND status = 'aguardando'
+            """,
+            (agora, agora, triagem_id),
+        )
+        if cursor.rowcount == 0:
+            return None
+        row = conn.execute("SELECT * FROM triagens WHERE id = ?", (triagem_id,)).fetchone()
+        return _row_to_dict(row) if row else None
+
+
+def chamar_proximo() -> dict[str, Any] | None:
+    """Chama automaticamente o proximo paciente da fila por prioridade Manchester.
+
+    Criterio: maior gravidade primeiro (vermelho > laranja > amarelo > verde >
+    azul); empate desempata pela ordem de chegada (criado_em ASC). Pacientes
+    ja chamados nao sao re-chamados — pega o primeiro com chamado_em IS NULL.
+    """
+    with _conn() as conn:
+        sql = f"""
+            SELECT id FROM triagens
+             WHERE status = 'aguardando' AND chamado_em IS NULL
+             ORDER BY {_ORDEM_SQL}, criado_em ASC
+             LIMIT 1
+        """
+        row = conn.execute(sql).fetchone()
+        if not row:
+            return None
+        return chamar_paciente(int(row["id"]))
+
+
+def dados_painel(top_proximos: int = 8, top_atendidos: int = 5) -> dict[str, Any]:
+    """Devolve a estrutura otimizada para o painel publico.
+
+    {
+      "chamada_atual": {<dict do paciente sendo chamado AGORA>} | None,
+      "proximos":      [<lista dos top N aguardando ainda nao chamados>],
+      "ultimos_atendidos": [<lista dos N atendidos mais recentes>],
+    }
+
+    "chamada_atual" e o paciente com chamado_em mais recente que ainda nao
+    foi marcado como atendido. Permite que o painel destaque ele em vez de
+    sumir assim que muda o status.
+    """
+    with _conn() as conn:
+        # Chamada atual: aguardando, com chamado_em preenchido, mais recente
+        sql_atual = """
+            SELECT * FROM triagens
+             WHERE status = 'aguardando' AND chamado_em IS NOT NULL
+             ORDER BY chamado_em DESC
+             LIMIT 1
+        """
+        atual = conn.execute(sql_atual).fetchone()
+
+        # Proximos: aguardando que ainda nao foram chamados, por prioridade
+        sql_proximos = f"""
+            SELECT * FROM triagens
+             WHERE status = 'aguardando' AND chamado_em IS NULL
+             ORDER BY {_ORDEM_SQL}, criado_em ASC
+             LIMIT ?
+        """
+        proximos = conn.execute(sql_proximos, (top_proximos,)).fetchall()
+
+        # Ultimos atendidos: ordem reversa de atualizacao
+        sql_atendidos = """
+            SELECT * FROM triagens
+             WHERE status = 'atendido'
+             ORDER BY atualizado_em DESC
+             LIMIT ?
+        """
+        atendidos = conn.execute(sql_atendidos, (top_atendidos,)).fetchall()
+
+    return {
+        "chamada_atual": _row_to_dict(atual) if atual else None,
+        "proximos": [_row_to_dict(r) for r in proximos],
+        "ultimos_atendidos": [_row_to_dict(r) for r in atendidos],
+    }
