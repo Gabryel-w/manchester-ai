@@ -24,7 +24,8 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 
 # 4. Instalar dependências
-pip install -r requirements.txt
+pip install -r requirements.txt ou python -m pip install -r requirements.txt
+
 
 # 5. Configurar a chave da Groq (necessário para o backend cloud)
 copy .env.example .env
@@ -40,7 +41,7 @@ python data\treinar_rf.py
 ollama pull gemma2:2b
 
 # 8. Subir o servidor
-uvicorn api:app --reload
+uvicorn api:app --reload ou python -m uvicorn api:app --reload
 ```
 
 ### macOS / Linux
