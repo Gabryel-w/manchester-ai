@@ -4,6 +4,8 @@ groq>=0.11.0
 ollama>=0.3.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
+# Necessario para receber UploadFile (ditado de sintomas via Whisper)
+python-multipart>=0.0.9
 # Necessario apenas para o backend Ollama (classificador Random Forest)
 scikit-learn>=1.5.0
 pandas>=2.0.0

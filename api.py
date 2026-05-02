@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -360,6 +360,55 @@ def painel_page():
             detail="Arquivo frontend/painel.html nao encontrado.",
         )
     return FileResponse(painel)
+
+
+# ---------------------------------------------------------------------------
+# Transcrição de áudio (ditado de sintomas) via Groq Whisper
+# ---------------------------------------------------------------------------
+@app.post("/api/transcrever")
+async def transcrever_audio(audio: UploadFile = File(...)):
+    """
+    Recebe um arquivo de audio (webm/opus do MediaRecorder do browser) e
+    devolve a transcricao em texto via Groq Whisper large-v3-turbo.
+
+    Usa a mesma chave GROQ_API_KEY da classificacao. Whisper na Groq tem
+    rate limit separado dos modelos de chat (mais generoso) e suporta
+    multilingue com excelente precisao em portugues.
+    """
+    import os
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key or api_key.startswith("cole_sua_chave"):
+        raise HTTPException(
+            status_code=400,
+            detail="GROQ_API_KEY nao configurada no .env",
+        )
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        # Le o arquivo enviado pelo browser
+        audio_bytes = await audio.read()
+        if not audio_bytes:
+            raise HTTPException(status_code=400, detail="Arquivo de audio vazio.")
+
+        # Chama a API Whisper. O nome do arquivo importa para detectar formato.
+        filename = audio.filename or "audio.webm"
+        resp = client.audio.transcriptions.create(
+            file=(filename, audio_bytes),
+            model="whisper-large-v3-turbo",
+            language="pt",
+            response_format="json",
+            temperature=0.0,
+        )
+        return {"texto": resp.text.strip()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao transcrever audio: {e}",
+        )
 
 
 # ---------------------------------------------------------------------------

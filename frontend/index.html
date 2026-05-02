@@ -365,6 +365,13 @@
                 </button>
               </div>
               <p id="dictation-help" class="hidden mt-1.5 text-[10px] text-slate-400">Ditando em pt-BR. Clique no microfone novamente para parar. Você pode editar o texto livremente depois.</p>
+              <!-- VU meter: barrinha verde que pulsa com o nível do microfone -->
+              <div id="dictation-vu-wrap" class="hidden mt-1.5 flex items-center gap-2">
+                <span class="text-[10px] font-medium text-slate-400">MIC</span>
+                <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div id="dictation-vu" class="h-full bg-emerald-500 transition-all duration-75" style="width:0%"></div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -1237,110 +1244,291 @@
   // -------------------------------------------------------------------------
   // DITADO POR VOZ (Web Speech API — 100% no navegador, zero token, zero custo)
   // -------------------------------------------------------------------------
-  // Usa SpeechRecognition nativa do browser (Chrome/Edge/Safari). Firefox
-  // não tem suporte nativo — nesse caso o botão fica desabilitado com tooltip.
-  // O áudio NÃO sai do equipamento se o browser usa engine local; em Chrome,
-  // o áudio é processado pelos servidores do Google sem custo para o sistema.
-  let recognition = null;
+  // ----------------------------------------------------------------
+  // Ditado por voz — MediaRecorder + Whisper (Groq) no backend
+  // ----------------------------------------------------------------
+  // Substitui o webkitSpeechRecognition (que dependia de servidores do
+  // Google e dava 'network error' em redes corporativas/restritivas) por
+  // MediaRecorder no browser + endpoint POST /api/transcrever no FastAPI
+  // que chama whisper-large-v3-turbo via Groq. Mais robusto, multilíngue,
+  // melhor qualidade. Fluxo:
+  //   1. Clique no mic → pede permissão e começa a gravar (MediaRecorder)
+  //   2. Clique de novo → para a gravação, envia o blob pro backend
+  //   3. Backend transcreve com Whisper, devolve texto
+  //   4. Texto é anexado/inserido no campo de sintomas
+  let mediaRecorder = null;
+  let recordedChunks = [];
   let isDictating = false;
-  let dictationBaseText = '';   // texto da textarea no momento em que o ditado começou
-  let dictationFinalAccum = ''; // soma dos resultados finais desta sessão de ditado
+  let dictationBaseText = '';
+  let micStream = null;
+  let audioCtxDict = null;
+  let vuRafId = null;
+
+  function setHelp(text, isError = false) {
+    const help = $('#dictation-help');
+    help.textContent = text;
+    help.classList.remove('hidden', 'text-slate-400', 'text-rose-600');
+    help.classList.add(isError ? 'text-rose-600' : 'text-slate-400');
+  }
+
+  async function ensureMicPermission() {
+    // Verifica e pede permissão explicitamente. Devolve true se OK.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setHelp('Navegador sem suporte a microfone (precisa HTTPS ou localhost).', true);
+      console.error('[DITADO] navigator.mediaDevices.getUserMedia indisponível');
+      return false;
+    }
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('[DITADO] Permissão de microfone concedida.');
+      startVuMeter(micStream);
+      return true;
+    } catch (e) {
+      console.error('[DITADO] getUserMedia falhou:', e.name, e.message);
+      const msgs = {
+        'NotAllowedError':   'Permissão de microfone negada. Clique no ícone de cadeado da barra de endereço e permita o microfone, depois recarregue a página.',
+        'NotFoundError':     'Nenhum microfone detectado. Verifique se o microfone está conectado.',
+        'NotReadableError':  'Microfone está em uso por outro programa (Discord, Zoom, etc.). Feche o programa e tente novamente.',
+        'OverconstrainedError': 'Configuração de áudio incompatível com o microfone disponível.',
+        'SecurityError':     'Acesso ao microfone bloqueado por política de segurança. Use HTTPS ou localhost.',
+      };
+      setHelp(msgs[e.name] || `Erro ao acessar microfone: ${e.name}`, true);
+      return false;
+    }
+  }
+
+  function stopMicStream() {
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    stopVuMeter();
+  }
+
+  // VU meter: barrinha verde no canto que pulsa com o nível do mic.
+  // Serve pra ver visualmente se o mic está captando algo.
+  function startVuMeter(stream) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtxDict = new Ctx();
+      const source = audioCtxDict.createMediaStreamSource(stream);
+      const analyser = audioCtxDict.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const bar = $('#dictation-vu');
+      const wrap = $('#dictation-vu-wrap');
+      if (wrap) wrap.classList.remove('hidden');
+
+      function tick() {
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        const level = Math.min(100, Math.round(avg * 1.5));  // 0-100
+        if (bar) bar.style.width = `${level}%`;
+        vuRafId = requestAnimationFrame(tick);
+      }
+      tick();
+    } catch (e) {
+      console.warn('[DITADO] VU meter indisponível:', e);
+    }
+  }
+
+  function stopVuMeter() {
+    if (vuRafId) { cancelAnimationFrame(vuRafId); vuRafId = null; }
+    if (audioCtxDict) { audioCtxDict.close().catch(() => {}); audioCtxDict = null; }
+    const bar = $('#dictation-vu');
+    const wrap = $('#dictation-vu-wrap');
+    if (wrap) wrap.classList.add('hidden');
+    if (bar) bar.style.width = '0%';
+  }
+
+  // Helper para trocar o ícone do botão. Como lucide.createIcons() substitui
+  // <i> por <svg>, querySelector('i') vira null depois — usar innerHTML.
+  function setBtnIcon(btn, iconName) {
+    btn.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+    lucide.createIcons();
+  }
+
+  // Coloca um spinner CSS dentro do botão (estado de loading)
+  function setBtnSpinner(btn) {
+    btn.innerHTML = `<span class="inline-block w-4 h-4 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin"></span>`;
+  }
+
+  // Customiza o status pill que aparece no canto da label (cor + texto + ícone)
+  function setDictationStatus(mode) {
+    const pill = $('#dictation-status');
+    if (!pill) return;
+    if (mode === null) {
+      pill.classList.add('hidden');
+      pill.classList.remove('inline-flex');
+      return;
+    }
+    pill.classList.remove('hidden');
+    pill.classList.add('inline-flex');
+    if (mode === 'recording') {
+      pill.className = 'inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 normal-case';
+      pill.innerHTML = '<span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span><span>Ouvindo…</span>';
+    } else if (mode === 'transcribing') {
+      pill.className = 'inline-flex items-center gap-1.5 text-[10px] font-semibold text-brand-600 normal-case';
+      pill.innerHTML = '<span class="inline-block w-2 h-2 rounded-full border-[1.5px] border-brand-200 border-t-brand-600 animate-spin"></span><span>Transcrevendo…</span>';
+    }
+  }
 
   function setupDictation() {
     const btn = $('#dictation-btn');
-    const status = $('#dictation-status');
-    const help = $('#dictation-help');
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       btn.disabled = true;
-      btn.title = 'Seu navegador não suporta ditado por voz. Use Chrome, Edge ou Safari.';
+      btn.title = 'Seu navegador não suporta gravação de áudio. Use Chrome, Edge, Firefox ou Safari recente.';
       btn.classList.add('opacity-40', 'cursor-not-allowed');
       return;
     }
-
-    recognition = new SR();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = true;       // mantém ouvindo até o usuário parar
-    recognition.interimResults = true;   // mostra texto provisório enquanto fala
-
-    recognition.onresult = (event) => {
-      let interim = '';
-      // Percorre só os resultados novos desta sessão (a partir de resultIndex)
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          dictationFinalAccum += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-      // Reescreve a textarea: texto-base + acumulado final + provisório atual.
-      // O usuário pode editar o resto à vontade enquanto fala — só a parte do
-      // ditado é gerenciada por aqui.
-      const sep = dictationBaseText && !dictationBaseText.endsWith(' ') ? ' ' : '';
-      $('#sintomas').value = dictationBaseText + sep + dictationFinalAccum + interim;
-      updateCounter();
-    };
-
-    recognition.onerror = (event) => {
-      const map = {
-        'no-speech': 'Não detectei fala. Tente novamente.',
-        'audio-capture': 'Microfone não encontrado.',
-        'not-allowed': 'Permissão de microfone negada. Habilite nas configurações do navegador.',
-        'network': 'Falha de rede no serviço de transcrição.',
-      };
-      help.textContent = map[event.error] || `Erro de ditado: ${event.error}`;
-      help.classList.remove('hidden', 'text-slate-400');
-      help.classList.add('text-rose-600');
-      stopDictation();
-    };
-
-    recognition.onend = () => {
-      // Pode terminar sozinha (timeout) ou pelo botão. Sincroniza UI sempre.
-      if (isDictating) stopDictation();
-    };
-
-    btn.addEventListener('click', () => {
-      if (isDictating) stopDictation();
-      else startDictation();
+    btn.addEventListener('click', async () => {
+      if (isDictating) await stopDictation();
+      else await startDictation();
     });
   }
 
-  function startDictation() {
-    if (!recognition || isDictating) return;
-    const sintomas = $('#sintomas');
-    dictationBaseText = sintomas.value;
-    dictationFinalAccum = '';
-    try {
-      recognition.start();
-    } catch (e) {
-      // Chamar start() em estado inválido lança InvalidStateError
-      console.warn('Falha ao iniciar ditado:', e);
-      return;
-    }
-    isDictating = true;
-    const btn = $('#dictation-btn');
-    btn.classList.add('!border-rose-500', '!text-rose-600', '!bg-rose-50');
-    btn.querySelector('i').setAttribute('data-lucide', 'mic-off');
-    $('#dictation-status').classList.remove('hidden');
-    $('#dictation-status').classList.add('inline-flex');
-    $('#dictation-help').classList.remove('hidden', 'text-rose-600');
-    $('#dictation-help').classList.add('text-slate-400');
-    $('#dictation-help').textContent = 'Ditando em pt-BR. Clique no microfone novamente para parar. Você pode editar o texto livremente depois.';
-    lucide.createIcons();
+  // Escolhe o melhor formato suportado pelo browser (Chrome/Edge dão preferência
+  // a webm/opus; Safari pode dar mp4/aac). Whisper aceita todos.
+  function escolherMimeType() {
+    const candidatos = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',
+    ];
+    return candidatos.find(t => MediaRecorder.isTypeSupported(t)) || '';
   }
 
-  function stopDictation() {
-    if (!recognition) return;
-    try { recognition.stop(); } catch {}
-    isDictating = false;
+  async function startDictation() {
+    if (isDictating) return;
+    setHelp('Solicitando acesso ao microfone…');
+
+    // 1. Permissão e stream
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      startVuMeter(micStream);
+    } catch (e) {
+      console.error('[DITADO] getUserMedia falhou:', e.name, e.message);
+      const msgs = {
+        'NotAllowedError':  'Permissão de microfone negada. Clique no cadeado da URL e permita o microfone.',
+        'NotFoundError':    'Nenhum microfone detectado.',
+        'NotReadableError': 'Microfone está em uso por outro programa (Discord, Zoom, etc.).',
+        'SecurityError':    'Acesso ao microfone bloqueado. Use HTTPS ou localhost.',
+      };
+      setHelp(msgs[e.name] || `Erro ao acessar microfone: ${e.name}`, true);
+      return;
+    }
+
+    // 2. MediaRecorder
+    const mimeType = escolherMimeType();
+    try {
+      mediaRecorder = new MediaRecorder(micStream, mimeType ? { mimeType } : {});
+    } catch (e) {
+      console.error('[DITADO] Falha ao criar MediaRecorder:', e);
+      stopMicStream();
+      setHelp('Navegador não conseguiu iniciar a gravação.', true);
+      return;
+    }
+
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
+    };
+    mediaRecorder.onstop = async () => {
+      stopMicStream();
+      await transcreverEEnviar(mimeType);
+    };
+    mediaRecorder.onerror = (e) => {
+      console.error('[DITADO] Erro do MediaRecorder:', e.error);
+      setHelp(`Erro ao gravar: ${e.error?.name || 'desconhecido'}`, true);
+      stopDictation();
+    };
+
+    // 3. Inicia gravação
+    isDictating = true;
+    dictationBaseText = $('#sintomas').value;
+    mediaRecorder.start(1000);  // captura chunks de 1s (não envia, só agrupa)
+
+    // 4. UI ativa (gravando)
     const btn = $('#dictation-btn');
+    btn.classList.add('!border-rose-500', '!text-rose-600', '!bg-rose-50');
+    setBtnIcon(btn, 'square');  // ícone de "stop"
+    setDictationStatus('recording');
+    setHelp('Gravando… Fale claramente. Clique no botão para parar e transcrever.');
+  }
+
+  async function stopDictation() {
+    if (!isDictating) return;
+    isDictating = false;
+
+    // Estado de loading: spinner no botão, pill troca pra "Transcrevendo…",
+    // botão desabilitado pra evitar duplo clique. Tudo é desfeito ao final
+    // de transcreverEEnviar (sucesso ou erro).
+    const btn = $('#dictation-btn');
+    btn.disabled = true;
     btn.classList.remove('!border-rose-500', '!text-rose-600', '!bg-rose-50');
-    btn.querySelector('i').setAttribute('data-lucide', 'mic');
-    $('#dictation-status').classList.add('hidden');
-    $('#dictation-status').classList.remove('inline-flex');
-    lucide.createIcons();
+    btn.classList.add('!border-brand-500', '!bg-brand-50');
+    setBtnSpinner(btn);
+    setDictationStatus('transcribing');
+    setHelp('Transcrevendo via Whisper… (pode levar alguns segundos)');
+
+    try {
+      mediaRecorder?.stop();  // dispara onstop → transcreverEEnviar
+    } catch {
+      finalizarUiDitado();
+    }
+  }
+
+  // Reseta o botão e o pill ao estado idle (chamada após sucesso ou erro
+  // da transcrição).
+  function finalizarUiDitado() {
+    const btn = $('#dictation-btn');
+    btn.disabled = false;
+    btn.classList.remove('!border-rose-500', '!text-rose-600', '!bg-rose-50',
+                          '!border-brand-500', '!bg-brand-50');
+    setBtnIcon(btn, 'mic');
+    setDictationStatus(null);
+  }
+
+  async function transcreverEEnviar(mimeType) {
+    if (recordedChunks.length === 0) {
+      setHelp('Nenhum áudio capturado. Tente novamente.', true);
+      finalizarUiDitado();
+      return;
+    }
+    const blob = new Blob(recordedChunks, { type: mimeType || 'audio/webm' });
+
+    const ext = (mimeType || '').includes('mp4') ? 'm4a'
+              : (mimeType || '').includes('ogg') ? 'ogg' : 'webm';
+    const form = new FormData();
+    form.append('audio', blob, `dictado.${ext}`);
+
+    try {
+      const r = await fetch('/api/transcrever', { method: 'POST', body: form });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+
+      const texto = (data.texto || '').trim();
+      if (!texto) {
+        setHelp('Whisper não detectou fala. Tente novamente.', true);
+        return;
+      }
+      // Anexa ao texto existente (não substitui) com separador inteligente
+      const sintomas = $('#sintomas');
+      const sep = dictationBaseText && !dictationBaseText.endsWith(' ')
+                  && !dictationBaseText.endsWith('\n') ? ' ' : '';
+      sintomas.value = dictationBaseText + sep + texto;
+      updateCounter();
+      setHelp(`Transcrito (${texto.length} caracteres). Você pode editar livremente.`);
+    } catch (err) {
+      console.error('[DITADO] Falha na transcrição:', err);
+      setHelp(`Falha na transcrição: ${err.message}`, true);
+    } finally {
+      finalizarUiDitado();
+    }
   }
 
   async function init() {
