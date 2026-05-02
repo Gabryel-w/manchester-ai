@@ -1,10 +1,6 @@
 """
-Treina um RandomForestClassifier no dataset sintetico e salva o modelo
-para inferencia rapida (substituindo a chamada ao LLM apenas para a etapa
-de classificacao).
-
-O LLM continua sendo usado downstream, mas so para gerar a justificativa
-em linguagem natural - diminuindo drasticamente o tempo de resposta.
+Treina o RandomForestClassifier no dataset sintetico e salva o modelo
+para inferencia rapida no agent.py (backend Ollama).
 
 Uso:
     python data/treinar_rf.py
@@ -26,15 +22,19 @@ MODEL_PATH = DATA_DIR / "rf_model.pkl"
 
 def carregar():
     df = pd.read_csv(CSV_PATH)
-    features = [
+    base = [
         "idade", "frequencia_cardiaca", "spo2", "temperatura",
-        "pa_sistolica", "pa_diastolica", "sexo_M", "sexo_F",
-    ] + [c for c in df.columns if c.startswith("flag_")]
-    return df, features
+        "pa_sistolica", "pa_diastolica", "pulse_pressure",
+        "sexo_M", "sexo_F",
+        "idade_faixa", "flag_pediatrico", "flag_idoso",
+    ]
+    flags = [c for c in df.columns if c.startswith("flag_") and c not in base]
+    return df, base + flags
 
 
 def treinar():
     df, features = carregar()
+    print(f"Dataset: {len(df)} linhas, {len(features)} features")
     X, y = df[features].fillna(0), df["classificacao"]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -50,7 +50,6 @@ def treinar():
         n_jobs=-1,
     )
     clf.fit(X_train, y_train)
-
     preds = clf.predict(X_test)
 
     print("=" * 60)
@@ -75,7 +74,14 @@ def treinar():
     scores = cross_val_score(clf, X, y, cv=5, scoring="f1_weighted", n_jobs=-1)
     print(f"F1 ponderado: {scores.mean():.3f} +/- {scores.std():.3f}")
 
-    # Persistencia (modelo + lista de features para reusar na inferencia)
+    print()
+    print("=" * 60)
+    print("Top 15 features mais importantes")
+    print("=" * 60)
+    importancias = sorted(zip(features, clf.feature_importances_), key=lambda x: -x[1])
+    for f, imp in importancias[:15]:
+        print(f"  {f:30s}  {imp:.4f}")
+
     with MODEL_PATH.open("wb") as f:
         pickle.dump({"model": clf, "features": features}, f)
     print()
