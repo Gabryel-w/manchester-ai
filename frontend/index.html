@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Triagem Clínica · Sistema de Apoio à Decisão</title>
+  <title>Manchester AI · Triagem de urgência</title>
+  <meta name="description" content="Manchester AI — triagem de urgência assistida por IA, com Protocolo de Manchester e explicabilidade nativa." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231D3557'/%3E%3Cg fill='%23F4F7FA'%3E%3Crect x='5' y='7' width='3.6' height='18' rx='1.8'/%3E%3Crect x='10.1' y='10.5' width='3.6' height='14.5' rx='1.8'/%3E%3Crect x='15.2' y='14' width='3.6' height='11' rx='1.8'/%3E%3Crect x='20.3' y='17.5' width='3.6' height='7.5' rx='1.8'/%3E%3Crect x='25.4' y='20.5' width='3.6' height='4.5' rx='1.8'/%3E%3C/g%3E%3C/svg%3E" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -17,37 +19,43 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            sans:    ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['Space Grotesk', 'Inter', 'sans-serif'],
+            mono:    ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
           },
           colors: {
+            /* Marca: azul ardósia profundo (não compete com as 5 cores Manchester) */
             brand: {
-              50:  '#eef2ff',
-              100: '#e0e7ff',
-              200: '#c7d2fe',
-              300: '#a5b4fc',
-              400: '#818cf8',
-              500: '#6366f1',
-              600: '#4f46e5',
-              700: '#4338ca',
-              800: '#3730a3',
-              900: '#312e81',
+              50:  '#F0F4F8',
+              100: '#DCE5EE',
+              200: '#BCCCDD',
+              300: '#93AAC4',
+              400: '#6886A6',
+              500: '#476A8E',
+              600: '#345578',
+              700: '#274363',
+              800: '#1D3557',
+              900: '#16263D',
+              950: '#0B1320',
             },
-            accent: {
-              50:  '#f0fdfa',
-              100: '#ccfbf1',
-              500: '#14b8a6',
-              600: '#0d9488',
-              700: '#0f766e',
+            /* Neutros frios da identidade */
+            ink: {
+              50:  '#F4F7FA',
+              100: '#E8EDF3',
+              200: '#D5DDE7',
+              300: '#B3C0D1',
+              400: '#8294AB',
+              500: '#5D6E85',
+              600: '#44546B',
+              700: '#2B3B52',
+              800: '#1C2A3F',
+              900: '#111C2E',
             },
           },
           boxShadow: {
-            'soft':   '0 1px 2px rgb(15 23 42 / 0.04), 0 2px 4px rgb(15 23 42 / 0.04)',
-            'card':   '0 1px 3px rgb(15 23 42 / 0.05), 0 8px 24px -8px rgb(15 23 42 / 0.10)',
-            'lifted': '0 2px 4px rgb(79 70 229 / 0.10), 0 12px 28px -8px rgb(79 70 229 / 0.25)',
-          },
-          backgroundImage: {
-            'gradient-brand':   'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-            'gradient-surface': 'linear-gradient(180deg, #ffffff 0%, #fafbff 100%)',
+            'elev-1': '0 1px 2px rgb(17 28 46 / 0.05), 0 1px 3px rgb(17 28 46 / 0.06)',
+            'elev-2': '0 2px 4px rgb(17 28 46 / 0.05), 0 8px 20px -6px rgb(17 28 46 / 0.10)',
+            'elev-3': '0 4px 8px rgb(17 28 46 / 0.06), 0 20px 40px -12px rgb(17 28 46 / 0.18)',
           },
         },
       },
@@ -55,14 +63,355 @@
   </script>
 
   <style>
-    body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
-    /* Subtle dot pattern background */
-    .bg-dots {
-      background-color: #f8fafc;
-      background-image: radial-gradient(circle at 1px 1px, rgb(15 23 42 / 0.04) 1px, transparent 0);
-      background-size: 24px 24px;
+    /* ==================================================================
+       MANCHESTER AI — DESIGN TOKENS
+       Base neutra fria ("ink") + marca azul-ardósia profundo.
+       As 5 cores Manchester são SEMÂNTICA CLÍNICA: chegam do backend
+       via cor_info (hex_fundo/hex_texto) e ficam reservadas à
+       classificação de risco — nunca usadas como decoração de marca.
+       ================================================================== */
+    :root {
+      /* Marca — azul ardósia */
+      --brand-900: #16263D; --brand-800: #1D3557; --brand-700: #274363;
+      --brand-600: #345578; --brand-500: #476A8E; --brand-400: #6886A6;
+      --brand-300: #93AAC4; --brand-200: #BCCCDD; --brand-100: #DCE5EE;
+      --brand-50:  #F0F4F8;
+      /* Neutros frios */
+      --ink-900: #111C2E; --ink-800: #1C2A3F; --ink-700: #2B3B52;
+      --ink-600: #44546B; --ink-500: #5D6E85; --ink-400: #8294AB;
+      --ink-300: #B3C0D1; --ink-200: #D5DDE7; --ink-100: #E8EDF3;
+      --ink-50:  #F4F7FA;
+      --bg: #EDF1F6; --surface: #FFFFFF;
+      /* Manchester — exclusivas da classificação de risco */
+      --mcs-vermelho: #FF4444; --mcs-laranja: #FF8C00; --mcs-amarelo: #FFD700;
+      --mcs-verde: #28A745; --mcs-azul: #17A2B8;
+      /* Alertas de formulário (limiar crítico de sinais vitais) */
+      --warn: #B45309; --warn-bg: #FFFBEB; --warn-bd: #F59E0B;
+      --crit: #B91C1C; --crit-bg: #FEF2F2; --crit-bd: #EF4444;
+      /* Tipografia */
+      --font-display: 'Space Grotesk', 'Inter', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+      /* Geometria */
+      --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+      /* Elevação em camadas */
+      --elev-1: 0 1px 2px rgb(17 28 46 / .05), 0 1px 3px rgb(17 28 46 / .06);
+      --elev-2: 0 2px 4px rgb(17 28 46 / .05), 0 8px 20px -6px rgb(17 28 46 / .10);
+      --elev-3: 0 4px 8px rgb(17 28 46 / .06), 0 20px 40px -12px rgb(17 28 46 / .18);
+      /* Movimento */
+      --t-fast: 150ms; --t-base: 200ms; --t-slow: 250ms;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --sidebar-w: 236px;
     }
-    /* Spinner */
+
+    body {
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "cv11", "ss01";
+      background: var(--bg);
+      color: var(--ink-900);
+    }
+    .font-display { font-family: var(--font-display); }
+    /* Números clínicos sempre tabulares */
+    .timer, .tabular, input[type=number], #sintomas-counter, .vital-field input {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Foco visível da marca (teclado) */
+    :focus-visible {
+      outline: 2px solid var(--brand-500);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* ================= APP SHELL ================= */
+    .app-sidebar {
+      position: fixed; z-index: 40; top: 0; bottom: 0; left: 0;
+      width: var(--sidebar-w);
+      display: flex; flex-direction: column;
+      background: var(--brand-900);
+      color: #fff;
+      padding: 22px 14px 18px;
+    }
+    .app-main {
+      margin-left: var(--sidebar-w);
+      display: flex; flex-direction: column;
+      min-height: 100vh;
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 4px; margin-top: 26px; }
+    .view-tab {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: var(--r-md);
+      font-size: 13px; font-weight: 600;
+      color: rgb(255 255 255 / .62);
+      position: relative; width: 100%; text-align: left;
+      transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+    }
+    .view-tab:hover { color: #fff; background: rgb(255 255 255 / .06); }
+    .view-tab.is-active { color: #fff; background: rgb(255 255 255 / .10); }
+    .view-tab.is-active::before {
+      content: ''; position: absolute; left: -14px; top: 8px; bottom: 8px;
+      width: 3px; border-radius: 0 3px 3px 0; background: var(--brand-300);
+    }
+    .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+    .sidebar-note { font-size: 10px; line-height: 1.5; color: rgb(255 255 255 / .38); }
+
+    @media (max-width: 1023px) {
+      .app-sidebar {
+        top: auto; right: 0; bottom: 0; left: 0;
+        width: 100%; height: 62px;
+        flex-direction: row; align-items: center;
+        padding: 0 14px; gap: 10px;
+        border-top: 1px solid var(--brand-800);
+      }
+      .app-sidebar .sidebar-foot, .app-sidebar .logo-text { display: none; }
+      .sidebar-nav { flex-direction: row; flex: 1; justify-content: center; margin-top: 0; }
+      .view-tab { width: auto; }
+      .view-tab.is-active::before { display: none; }
+      .app-main { margin-left: 0; padding-bottom: 62px; }
+    }
+
+    .page-header {
+      position: sticky; top: 0; z-index: 30;
+      background: rgb(255 255 255 / .85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--ink-200);
+    }
+
+    /* ================= COMPONENTES ================= */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--ink-200);
+      border-radius: var(--r-lg);
+      box-shadow: var(--elev-1);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border-radius: var(--r-md); font-weight: 600; font-size: 13px;
+      padding: 9px 16px; cursor: pointer;
+      transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+                  color var(--t-fast) var(--ease), box-shadow var(--t-base) var(--ease),
+                  transform var(--t-fast) var(--ease);
+    }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none !important; }
+    .btn-primary { background: var(--brand-800); color: #fff; box-shadow: var(--elev-2); }
+    .btn-primary:hover { background: var(--brand-700); box-shadow: var(--elev-3); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-secondary { background: var(--surface); color: var(--ink-700); border: 1px solid var(--ink-200); box-shadow: var(--elev-1); }
+    .btn-secondary:hover { border-color: var(--brand-400); color: var(--brand-700); }
+    .btn-ghost { background: transparent; color: var(--ink-500); }
+    .btn-ghost:hover { background: var(--ink-100); color: var(--ink-700); }
+
+    .field-label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--ink-600); margin-bottom: 6px;
+      letter-spacing: .01em;
+    }
+    .field-input {
+      width: 100%;
+      border: 1px solid var(--ink-200); border-radius: var(--r-md);
+      background: var(--surface); color: var(--ink-900);
+      padding: 10px 12px; font-size: 14px; font-weight: 500;
+      transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+    }
+    .field-input::placeholder { color: var(--ink-400); font-weight: 400; }
+    .field-input:hover { border-color: var(--ink-300); }
+    .field-input:focus {
+      outline: none; border-color: var(--brand-500);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 18%, transparent);
+    }
+    .input-unit { position: relative; }
+    .input-unit .unit {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      pointer-events: none; font-family: var(--font-mono);
+      font-size: 11px; font-weight: 500; color: var(--ink-400);
+    }
+    /* Sinais vitais: valor em mono + validação visual de limiar crítico */
+    .vital-field .field-input { font-family: var(--font-mono); padding-right: 52px; }
+    .vital-hint {
+      display: none; align-items: flex-start; gap: 4px;
+      font-size: 11px; font-weight: 500; line-height: 1.4; margin-top: 5px;
+    }
+    .vital-field.is-warn .field-input { border-color: var(--warn-bd); background: var(--warn-bg); }
+    .vital-field.is-warn .vital-hint { display: flex; color: var(--warn); }
+    .vital-field.is-crit .field-input { border-color: var(--crit-bd); background: var(--crit-bg); }
+    .vital-field.is-crit .vital-hint { display: flex; color: var(--crit); }
+
+    .group-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+    .group-num {
+      font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+      color: var(--brand-500); letter-spacing: .08em;
+    }
+    .group-title {
+      font-family: var(--font-display); font-size: 15px; font-weight: 600;
+      letter-spacing: -.01em; color: var(--ink-900);
+    }
+    .group-sub { font-size: 12px; color: var(--ink-500); margin-top: 1px; }
+
+    .case-chip {
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid var(--ink-200); border-radius: 999px;
+      background: var(--surface); padding: 5px 12px;
+      font-size: 12px; font-weight: 600; color: var(--ink-600);
+      transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+    }
+    .case-chip:hover { border-color: var(--brand-400); color: var(--brand-700); box-shadow: var(--elev-1); }
+    .case-chip .dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+
+    /* ================= RESULTADO (momento hero) ================= */
+    .result-hero {
+      --mcs: #64748b; --mcs-ink: #ffffff;
+      position: relative;
+      padding: 22px 24px 24px 32px;
+      background: color-mix(in srgb, var(--mcs) 9%, #fff);
+      border-bottom: 1px solid color-mix(in srgb, var(--mcs) 25%, #fff);
+    }
+    .result-hero::before {
+      content: ''; position: absolute; top: 0; bottom: 0; left: 0;
+      width: 10px; background: var(--mcs);
+    }
+    .result-kicker {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .14em; color: var(--ink-500);
+    }
+    .result-chip {
+      font-family: var(--font-display); font-weight: 700; font-size: 24px;
+      letter-spacing: -.01em; line-height: 1;
+      background: var(--mcs); color: var(--mcs-ink);
+      padding: 7px 14px 8px; border-radius: 8px;
+    }
+    .result-time-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .14em; color: var(--ink-500);
+    }
+    .result-time {
+      font-family: var(--font-display); font-weight: 700;
+      font-size: clamp(1.9rem, 4vw, 2.5rem); letter-spacing: -.02em;
+      line-height: 1.1; color: var(--ink-900);
+      font-variant-numeric: tabular-nums;
+    }
+    .result-desc { font-size: 13px; font-weight: 500; color: var(--ink-600); margin-top: 2px; }
+    .conf {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 600; color: var(--ink-600);
+      background: var(--surface); border: 1px solid var(--ink-200);
+      padding: 4px 10px; border-radius: 999px;
+    }
+    .conf-meter { display: inline-flex; gap: 3px; }
+    .conf-meter i { width: 10px; height: 4px; border-radius: 2px; background: var(--ink-200); }
+    .conf-meter i.on { background: var(--brand-600); }
+
+    .inc-banner {
+      margin: 16px 24px 0;
+      border: 1px solid #FCD34D; background: #FFFBEB;
+      border-radius: var(--r-md); padding: 14px;
+    }
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E;
+      border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; line-height: 1.5;
+    }
+    .alert-item svg { color: #D97706; }
+    .question-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--brand-50); border: 1px solid var(--brand-100); color: var(--brand-800);
+      border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; line-height: 1.5;
+    }
+    .question-item svg { color: var(--brand-500); }
+    .inc-reason {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 12px; color: #92400E; line-height: 1.5;
+    }
+    .inc-reason::before {
+      content: ''; width: 5px; height: 5px; border-radius: 999px;
+      background: #D97706; flex-shrink: 0; margin-top: 6px;
+    }
+
+    /* Histórico */
+    .history-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 20px;
+      transition: background var(--t-fast) var(--ease);
+    }
+    .history-item:hover { background: var(--ink-50); }
+    .hist-swatch { width: 8px; height: 34px; border-radius: 4px; flex-shrink: 0; }
+
+    /* ================= FILA ================= */
+    .fila-band { width: 10px; flex-shrink: 0; }
+    .fila-classe {
+      font-family: var(--font-display); font-size: 12px; font-weight: 700;
+      letter-spacing: .02em; padding: 3px 9px; border-radius: 6px; line-height: 1.3;
+    }
+    .fila-nome {
+      font-family: var(--font-display); font-size: 15px; font-weight: 600;
+      letter-spacing: -.01em; color: var(--ink-900);
+    }
+    .fila-meta { font-size: 11px; font-weight: 500; color: var(--ink-500); margin-top: 3px; }
+    .fila-timer-label {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .14em; color: var(--ink-400);
+    }
+    .timer { font-family: var(--font-mono); font-weight: 600; font-size: 20px; color: var(--ink-800); }
+    .timer.is-done { color: var(--ink-300); font-size: 15px; }
+    .timer.is-warn { color: var(--warn); }
+    .timer.is-late { color: #DC2626; animation: pulseSoft 1.2s ease-in-out infinite; }
+    @keyframes pulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+    .vital-chip {
+      background: var(--ink-50); border: 1px solid var(--ink-100);
+      border-radius: var(--r-sm); padding: 6px 10px;
+    }
+    .vital-chip .k {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--ink-400);
+    }
+    .vital-chip .v {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+      color: var(--ink-700); font-variant-numeric: tabular-nums;
+    }
+    .tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 999px; padding: 2px 9px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    }
+    .tag-wait { background: #FEF3C7; color: #92400E; }
+    .tag-done { background: #D1FAE5; color: #065F46; }
+    .tag-off  { background: var(--ink-100); color: var(--ink-600); }
+    .tag-trava { background: #FEF3C7; color: #92400E; }
+    .tag-called { background: var(--brand-100); color: var(--brand-800); }
+    details .details-body { animation: reveal var(--t-base) var(--ease); }
+    details summary { list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary .chev { transition: transform var(--t-fast) var(--ease); }
+    details[open] summary .chev { transform: rotate(90deg); }
+
+    /* ================= ESTADOS ================= */
+    .skel {
+      position: relative; overflow: hidden;
+      background: var(--ink-100); border-radius: 6px;
+    }
+    .skel::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgb(255 255 255 / .65), transparent);
+      transform: translateX(-100%);
+      animation: shimmer 1.4s var(--ease) infinite;
+    }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+
+    /* Microfone: gravação e transcrição (classes aplicadas pelo JS) */
+    #dictation-btn { transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+    #dictation-btn.is-recording {
+      border-color: #E11D48 !important; color: #E11D48 !important; background: #FFF1F2 !important;
+      animation: recPulse 1.6s ease-out infinite;
+    }
+    @keyframes recPulse {
+      0%   { box-shadow: 0 0 0 0 rgb(225 29 72 / .35); }
+      70%  { box-shadow: 0 0 0 9px rgb(225 29 72 / 0); }
+      100% { box-shadow: 0 0 0 0 rgb(225 29 72 / 0); }
+    }
+    #dictation-btn.is-transcribing { border-color: var(--brand-500) !important; background: var(--brand-50) !important; }
+
+    /* Spinner (usado pelo JS no botão de submit) */
     .spinner {
       width: 14px; height: 14px;
       border: 2px solid rgba(255,255,255,0.3);
@@ -71,329 +420,327 @@
       animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    /* Smooth reveal animation */
-    .reveal { animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    /* Entrada suave do resultado */
+    .reveal { animation: reveal 0.35s var(--ease); }
     @keyframes reveal {
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
-    /* Custom scrollbar for textareas */
-    textarea::-webkit-scrollbar { width: 8px; }
-    textarea::-webkit-scrollbar-track { background: transparent; }
-    textarea::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    /* Hide arrows on number inputs */
+    /* Scrollbars discretos */
+    textarea::-webkit-scrollbar, #history-list::-webkit-scrollbar { width: 8px; }
+    textarea::-webkit-scrollbar-track, #history-list::-webkit-scrollbar-track { background: transparent; }
+    textarea::-webkit-scrollbar-thumb, #history-list::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 4px; }
+    textarea::-webkit-scrollbar-thumb:hover, #history-list::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
+    /* Sem setas nos inputs numéricos */
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
+
+    /* Acessibilidade: respeita preferência por menos movimento */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 
-<body class="bg-dots text-slate-900 min-h-screen flex flex-col">
+<body class="antialiased">
 
   <!-- ============================================================ -->
-  <!-- HEADER                                                       -->
+  <!-- SIDEBAR (bottom bar no mobile)                               -->
   <!-- ============================================================ -->
-  <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
-    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+  <aside class="app-sidebar">
+    <a href="/" class="flex items-center gap-3 px-1" aria-label="Manchester AI — início">
+      <svg viewBox="0 0 32 32" class="h-9 w-9 shrink-0" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#1D3557"/>
+        <rect width="31" height="31" x="0.5" y="0.5" rx="7.5" fill="none" stroke="rgba(255,255,255,0.14)"/>
+        <g fill="#F4F7FA">
+          <rect x="5" y="7" width="3.6" height="18" rx="1.8"/>
+          <rect x="10.1" y="10.5" width="3.6" height="14.5" rx="1.8"/>
+          <rect x="15.2" y="14" width="3.6" height="11" rx="1.8"/>
+          <rect x="20.3" y="17.5" width="3.6" height="7.5" rx="1.8"/>
+          <rect x="25.4" y="20.5" width="3.6" height="4.5" rx="1.8"/>
+        </g>
+      </svg>
+      <span class="logo-text leading-tight">
+        <span class="block font-display text-[15px] font-semibold tracking-tight text-white">Manchester <span class="text-brand-300">AI</span></span>
+        <span class="block text-[10px] font-medium text-white/40 mt-0.5">Triagem de urgência</span>
+      </span>
+    </a>
 
-      <div class="flex items-center gap-3">
-        <div class="relative h-9 w-9 rounded-xl bg-gradient-brand shadow-lifted flex items-center justify-center">
-          <i data-lucide="activity" class="w-4.5 h-4.5 text-white" style="width:18px;height:18px"></i>
-        </div>
-        <div class="leading-tight">
-          <div class="text-sm font-semibold tracking-tight text-slate-900">Triagem Clínica</div>
-          <div class="text-[11px] text-slate-500 font-medium">Sistema de Apoio à Decisão · Manchester</div>
-        </div>
+    <nav id="view-tabs" class="sidebar-nav" aria-label="Navegação principal">
+      <button data-view="triagem" type="button" class="view-tab is-active">
+        <i data-lucide="stethoscope" class="w-4 h-4"></i>
+        <span>Triagem</span>
+      </button>
+      <button data-view="fila" type="button" class="view-tab">
+        <i data-lucide="list-ordered" class="w-4 h-4"></i>
+        <span>Fila</span>
+        <span id="fila-badge" class="hidden inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-rose-600 px-1.5 text-[10px] font-bold text-white ml-auto">0</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div id="status-pill" class="hidden flex items-center gap-2.5 rounded-lg bg-white/[0.06] px-3 py-2.5 text-[11px] font-medium text-white/70">
+        <span class="relative flex h-2 w-2">
+          <span id="status-ping" class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
+          <span id="status-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span id="status-text">Conectando…</span>
       </div>
-
-      <div class="flex items-center gap-2.5">
-        <!-- View tabs -->
-        <div id="view-tabs" class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-soft">
-          <button data-view="triagem" type="button"
-            class="view-tab inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">
-            <i data-lucide="stethoscope" class="w-3.5 h-3.5"></i>
-            <span>Triagem</span>
-          </button>
-          <button data-view="fila" type="button"
-            class="view-tab inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
-            <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
-            <span>Fila</span>
-            <span id="fila-badge" class="hidden inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">0</span>
-          </button>
-        </div>
-
-        <!-- Status pill -->
-        <div id="status-pill" class="hidden md:inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
-          <span class="relative flex h-2 w-2">
-            <span id="status-ping" class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
-            <span id="status-dot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span id="status-text">Conectando…</span>
-        </div>
-
-        <!-- Backend selector -->
-        <div class="relative">
-          <button id="backend-btn"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-soft hover:bg-slate-50 hover:border-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/30">
-            <i data-lucide="cpu" class="w-3.5 h-3.5 text-brand-600"></i>
-            <span id="backend-label" class="whitespace-nowrap">Groq</span>
-            <span class="text-slate-300">·</span>
-            <span id="model-label" class="text-slate-500 font-medium whitespace-nowrap max-w-[180px] truncate">—</span>
-            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
-          </button>
-
-          <div id="backend-menu" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-card p-3 z-40">
-            <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Backend LLM</div>
-            <div class="grid grid-cols-2 gap-2 mt-1.5 mb-3">
-              <button data-backend="Groq"
-                class="backend-opt group rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
-                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 group-hover:text-brand-700">
-                  <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i> Groq
-                </div>
-                <div class="text-[10px] text-slate-500 mt-1">Cloud · &lt; 1 segundo</div>
-              </button>
-              <button data-backend="Ollama"
-                class="backend-opt group rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
-                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 group-hover:text-brand-700">
-                  <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-emerald-600"></i> Ollama
-                </div>
-                <div class="text-[10px] text-slate-500 mt-1">Local · privado</div>
-              </button>
-            </div>
-            <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Modelo</div>
-            <select id="model-select"
-              class="w-full mt-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
-            </select>
-          </div>
-        </div>
-      </div>
+      <p class="sidebar-note">
+        Prova de conceito acadêmica · URI<br/>
+        Não substitui avaliação médica profissional.
+      </p>
     </div>
-  </header>
+  </aside>
 
   <!-- ============================================================ -->
-  <!-- HERO / Sub-header                                            -->
+  <!-- ÁREA DE CONTEÚDO                                             -->
   <!-- ============================================================ -->
-  <section class="border-b border-slate-200/70 bg-white">
-    <div class="max-w-7xl mx-auto px-6 py-7 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
-      <div class="max-w-2xl">
-        <div class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 mb-3">
-          <i data-lucide="sparkles" class="w-3 h-3"></i> Nova avaliação
+  <div class="app-main">
+
+    <header class="page-header">
+      <div class="max-w-6xl mx-auto px-5 md:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <h1 class="font-display text-[15px] font-semibold tracking-tight text-ink-900 truncate">Unidade de urgência</h1>
+          <p class="text-[11px] text-ink-500 font-medium hidden sm:block">Protocolo de Manchester · apoio à decisão com explicabilidade</p>
         </div>
-        <h1 class="text-3xl font-bold tracking-tight text-slate-900">Triagem assistida por IA</h1>
-        <p class="text-sm text-slate-600 mt-2 leading-relaxed">
-          Avaliação seguindo o Protocolo de Manchester com explicabilidade nativa.
-          O modelo justifica cada classificação em linguagem natural para revisão do enfermeiro.
-        </p>
-      </div>
 
-      <div class="flex flex-col gap-2">
-        <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Casos demonstração</span>
-        <div class="flex flex-wrap items-center gap-2">
-          <button data-case="azul"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-cyan-500 hover:bg-cyan-50/50 hover:text-cyan-700">
-            <span class="h-2 w-2 rounded-full bg-[#17A2B8]"></span> Tosse leve
-          </button>
-          <button data-case="amarelo"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-yellow-500 hover:bg-yellow-50/50 hover:text-yellow-700">
-            <span class="h-2 w-2 rounded-full bg-[#FFD700]"></span> Cefaleia + HAS
-          </button>
-          <button data-case="vermelho"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-soft transition-all hover:border-red-500 hover:bg-red-50/50 hover:text-red-700">
-            <span class="h-2 w-2 rounded-full bg-[#FF4444]"></span> Dor torácica
-          </button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================ -->
-  <!-- MAIN GRID                                                    -->
-  <!-- ============================================================ -->
-  <main id="view-triagem" class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full">
-
-    <!-- ====================== FORM COLUMN ====================== -->
-    <form id="triagem-form" class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
-
-      <div class="p-7 md:p-8 space-y-8">
-
-        <!-- PROFISSIONAL RESPONSÁVEL -->
-        <section class="rounded-xl bg-brand-50/40 border border-brand-100 p-4">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="h-9 w-9 rounded-lg bg-white border border-brand-100 flex items-center justify-center shrink-0">
-              <i data-lucide="badge-check" class="w-4 h-4 text-brand-600"></i>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold tracking-tight text-slate-900">Profissional responsável</h2>
-              <p class="text-xs text-slate-500">Quem está conduzindo esta triagem</p>
-            </div>
-          </div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="enfermeiro">
-            Enfermeiro <span class="text-red-500">*</span>
-            <span class="text-slate-400 font-normal">(nome ou matrícula)</span>
-          </label>
-          <input id="enfermeiro" name="enfermeiro" type="text" required minlength="2" maxlength="80"
-            placeholder="Ex.: Ana Souza · COREN 123456"
-            class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-        </section>
-
-        <!-- IDENTIFICAÇÃO DO PACIENTE -->
-        <section>
-          <div class="flex items-center gap-3 mb-5">
-            <div class="h-9 w-9 rounded-lg bg-brand-50 border border-brand-100 flex items-center justify-center">
-              <i data-lucide="user-round" class="w-4 h-4 text-brand-600"></i>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold tracking-tight text-slate-900">Paciente</h2>
-              <p class="text-xs text-slate-500">Dados de identificação</p>
-            </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <!-- Casos de demonstração -->
+          <div class="hidden xl:flex items-center gap-2" role="group" aria-label="Casos de demonstração">
+            <span class="text-[10px] font-bold uppercase tracking-widest text-ink-400 mr-1">Demo</span>
+            <button data-case="azul" type="button" class="case-chip">
+              <span class="dot" style="background: var(--mcs-azul)"></span> Tosse leve
+            </button>
+            <button data-case="amarelo" type="button" class="case-chip">
+              <span class="dot" style="background: var(--mcs-amarelo)"></span> Cefaleia + HAS
+            </button>
+            <button data-case="vermelho" type="button" class="case-chip">
+              <span class="dot" style="background: var(--mcs-vermelho)"></span> Dor torácica
+            </button>
           </div>
 
-          <div class="mb-4">
-            <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="paciente_nome">
-              Nome do paciente <span class="text-slate-400 font-normal">(opcional)</span>
-            </label>
-            <input id="paciente_nome" name="paciente_nome" type="text" maxlength="120"
-              placeholder="Ex.: João da Silva"
-              class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-          </div>
+          <!-- Backend selector -->
+          <div class="relative">
+            <button id="backend-btn"
+              class="btn btn-secondary !py-2 text-xs"
+              aria-haspopup="true" aria-controls="backend-menu">
+              <i data-lucide="cpu" class="w-3.5 h-3.5 text-brand-600"></i>
+              <span id="backend-label" class="whitespace-nowrap">Groq</span>
+              <span class="text-ink-300">·</span>
+              <span id="model-label" class="text-ink-500 font-medium whitespace-nowrap max-w-[150px] truncate">—</span>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-ink-400"></i>
+            </button>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="idade">Idade</label>
-              <div class="relative">
-                <input id="idade" name="idade" type="number" min="0" max="120" value="30" required
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-10 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">anos</span>
+            <div id="backend-menu" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-ink-200 bg-white shadow-elev-3 p-3 z-40">
+              <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-ink-400">Backend LLM</div>
+              <div class="grid grid-cols-2 gap-2 mt-1.5 mb-3">
+                <button data-backend="Groq"
+                  class="backend-opt group rounded-lg border border-ink-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
+                  <div class="flex items-center gap-1.5 text-xs font-semibold text-ink-700 group-hover:text-brand-700">
+                    <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i> Groq
+                  </div>
+                  <div class="text-[10px] text-ink-500 mt-1">Cloud · &lt; 1 segundo</div>
+                </button>
+                <button data-backend="Ollama"
+                  class="backend-opt group rounded-lg border border-ink-200 px-3 py-2.5 text-left transition-all hover:border-brand-500 hover:bg-brand-50/50">
+                  <div class="flex items-center gap-1.5 text-xs font-semibold text-ink-700 group-hover:text-brand-700">
+                    <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-emerald-600"></i> Ollama
+                  </div>
+                  <div class="text-[10px] text-ink-500 mt-1">Local · privado</div>
+                </button>
               </div>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="sexo">Sexo</label>
-              <select id="sexo" name="sexo"
-                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 shadow-soft cursor-pointer transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500">
-                <option>Masculino</option>
-                <option>Feminino</option>
-                <option selected>Não informado</option>
+              <div class="px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-ink-400">Modelo</div>
+              <select id="model-select"
+                class="w-full mt-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
               </select>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="pressao">Pressão arterial</label>
-              <div class="relative">
-                <input id="pressao" name="pressao" type="text" value="120/80" placeholder="120/80"
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-14 text-sm font-medium text-slate-900 placeholder-slate-400 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">mmHg</span>
-              </div>
-            </div>
           </div>
-        </section>
+        </div>
+      </div>
+    </header>
 
-        <div class="border-t border-slate-100"></div>
+  <!-- ============================================================ -->
+  <!-- VIEW: TRIAGEM                                                -->
+  <!-- ============================================================ -->
+  <main id="view-triagem" class="max-w-6xl mx-auto px-5 md:px-8 py-7 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 w-full items-start">
 
-        <!-- SINAIS VITAIS -->
+    <!-- ====================== FORM COLUMN ====================== -->
+    <form id="triagem-form" class="lg:col-span-7 card overflow-hidden">
+
+      <div class="p-6 md:p-8 space-y-9">
+
+        <!-- 01 · IDENTIFICAÇÃO -->
         <section>
-          <div class="flex items-center gap-3 mb-5">
-            <div class="h-9 w-9 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center">
-              <i data-lucide="heart-pulse" class="w-4 h-4 text-rose-600"></i>
-            </div>
+          <header class="group-head">
+            <span class="group-num">01</span>
             <div>
-              <h2 class="text-sm font-bold tracking-tight text-slate-900">Sinais vitais</h2>
-              <p class="text-xs text-slate-500">Frequência, saturação e temperatura</p>
+              <h2 class="group-title">Identificação</h2>
+              <p class="group-sub">Profissional responsável e dados do paciente</p>
             </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="frequencia_cardiaca">Freq. cardíaca</label>
-              <div class="relative">
-                <input id="frequencia_cardiaca" name="frequencia_cardiaca" type="number" min="20" max="250" value="75"
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-12 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">bpm</span>
-              </div>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="spo2">Saturação SpO₂</label>
-              <div class="relative">
-                <input id="spo2" name="spo2" type="number" min="50" max="100" value="98"
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-8 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">%</span>
-              </div>
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="temperatura">Temperatura</label>
-              <div class="relative">
-                <input id="temperatura" name="temperatura" type="number" step="0.1" min="30" max="43" value="36.5"
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 pr-9 text-sm font-medium text-slate-900 shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500" />
-                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-slate-400">°C</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div class="border-t border-slate-100"></div>
-
-        <!-- ANAMNESE -->
-        <section>
-          <div class="flex items-center gap-3 mb-5">
-            <div class="h-9 w-9 rounded-lg bg-accent-50 border border-accent-100 flex items-center justify-center">
-              <i data-lucide="clipboard-list" class="w-4 h-4 text-accent-600"></i>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold tracking-tight text-slate-900">Anamnese</h2>
-              <p class="text-xs text-slate-500">Queixa principal e histórico</p>
-            </div>
-          </div>
+          </header>
 
           <div class="space-y-4">
             <div>
-              <label class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5" for="sintomas">
-                <span>Queixa principal e sintomas <span class="text-red-500">*</span></span>
-                <div class="flex items-center gap-2">
+              <label class="field-label" for="enfermeiro">
+                Enfermeiro responsável <span class="text-rose-600">*</span>
+                <span class="text-ink-400 font-normal">(nome ou matrícula)</span>
+              </label>
+              <input id="enfermeiro" name="enfermeiro" type="text" required minlength="2" maxlength="80"
+                placeholder="Ex.: Ana Souza · COREN 123456"
+                class="field-input" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="field-label" for="paciente_nome">
+                  Nome do paciente <span class="text-ink-400 font-normal">(opcional)</span>
+                </label>
+                <input id="paciente_nome" name="paciente_nome" type="text" maxlength="120"
+                  placeholder="Ex.: João da Silva"
+                  class="field-input" />
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="field-label" for="idade">Idade</label>
+                  <div class="input-unit">
+                    <input id="idade" name="idade" type="number" min="0" max="120" value="30" required
+                      class="field-input pr-12" />
+                    <span class="unit">anos</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="field-label" for="sexo">Sexo</label>
+                  <select id="sexo" name="sexo" class="field-input cursor-pointer">
+                    <option>Masculino</option>
+                    <option>Feminino</option>
+                    <option selected>Não informado</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="border-t border-ink-100"></div>
+
+        <!-- 02 · SINAIS VITAIS -->
+        <section>
+          <header class="group-head">
+            <span class="group-num">02</span>
+            <div>
+              <h2 class="group-title">Sinais vitais</h2>
+              <p class="group-sub">Valores fora do limiar crítico são sinalizados em tempo real</p>
+            </div>
+          </header>
+
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="vital-field">
+              <label class="field-label" for="pressao">Pressão arterial</label>
+              <div class="input-unit">
+                <input id="pressao" name="pressao" type="text" value="120/80" placeholder="120/80"
+                  class="field-input" />
+                <span class="unit">mmHg</span>
+              </div>
+              <p class="vital-hint" role="status"></p>
+            </div>
+            <div class="vital-field">
+              <label class="field-label" for="frequencia_cardiaca">Freq. cardíaca</label>
+              <div class="input-unit">
+                <input id="frequencia_cardiaca" name="frequencia_cardiaca" type="number" min="20" max="250" value="75"
+                  class="field-input" />
+                <span class="unit">bpm</span>
+              </div>
+              <p class="vital-hint" role="status"></p>
+            </div>
+            <div class="vital-field">
+              <label class="field-label" for="spo2">Saturação SpO₂</label>
+              <div class="input-unit">
+                <input id="spo2" name="spo2" type="number" min="50" max="100" value="98"
+                  class="field-input" />
+                <span class="unit">%</span>
+              </div>
+              <p class="vital-hint" role="status"></p>
+            </div>
+            <div class="vital-field">
+              <label class="field-label" for="temperatura">Temperatura</label>
+              <div class="input-unit">
+                <input id="temperatura" name="temperatura" type="number" step="0.1" min="30" max="43" value="36.5"
+                  class="field-input" />
+                <span class="unit">°C</span>
+              </div>
+              <p class="vital-hint" role="status"></p>
+            </div>
+          </div>
+        </section>
+
+        <div class="border-t border-ink-100"></div>
+
+        <!-- 03 · QUEIXA -->
+        <section>
+          <header class="group-head">
+            <span class="group-num">03</span>
+            <div>
+              <h2 class="group-title">Queixa</h2>
+              <p class="group-sub">Queixa principal, sintomas e histórico relevante</p>
+            </div>
+          </header>
+
+          <div class="space-y-4">
+            <div>
+              <label class="field-label flex items-center justify-between" for="sintomas">
+                <span>Queixa principal e sintomas <span class="text-rose-600">*</span></span>
+                <span class="flex items-center gap-2">
                   <span id="dictation-status" class="hidden items-center gap-1 text-[10px] font-semibold text-rose-600 normal-case">
                     <span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                     <span>Ouvindo…</span>
                   </span>
-                  <span class="text-[10px] font-medium text-slate-400 normal-case" id="sintomas-counter">0 caracteres</span>
-                </div>
+                  <span class="text-[10px] font-medium text-ink-400 normal-case tabular" id="sintomas-counter">0 caracteres</span>
+                </span>
               </label>
               <div class="relative">
-                <textarea id="sintomas" name="sintomas" rows="6" required
+                <textarea id="sintomas" name="sintomas" rows="7" required
                   placeholder="Ex.: Paciente refere dor de cabeça intensa há 6 horas, com náusea associada. Nega febre, vômitos ou alterações visuais."
-                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 pr-14 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[120px]"></textarea>
+                  class="field-input !text-[15px] leading-relaxed resize-y min-h-[150px] pr-14 py-3"></textarea>
                 <button type="button" id="dictation-btn" title="Ditar sintomas (clique para falar)"
-                  class="absolute top-2.5 right-2.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-soft transition-all hover:border-brand-500 hover:text-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                  class="absolute top-2.5 right-2.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-200 bg-white text-ink-500 shadow-elev-1 hover:border-brand-500 hover:text-brand-600 disabled:opacity-40 disabled:cursor-not-allowed">
                   <i data-lucide="mic" class="w-4 h-4"></i>
                 </button>
               </div>
               <p id="dictation-help" class="hidden mt-1.5 text-[10px] text-slate-400">Ditando em pt-BR. Clique no microfone novamente para parar. Você pode editar o texto livremente depois.</p>
-              <!-- VU meter: barrinha verde que pulsa com o nível do microfone -->
+              <!-- VU meter: barrinha que pulsa com o nível do microfone -->
               <div id="dictation-vu-wrap" class="hidden mt-1.5 flex items-center gap-2">
-                <span class="text-[10px] font-medium text-slate-400">MIC</span>
-                <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <span class="text-[10px] font-semibold text-ink-400 font-mono">MIC</span>
+                <div class="flex-1 h-1.5 rounded-full bg-ink-100 overflow-hidden">
                   <div id="dictation-vu" class="h-full bg-emerald-500 transition-all duration-75" style="width:0%"></div>
                 </div>
               </div>
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5" for="historico">
-                Histórico clínico relevante <span class="text-slate-400 font-normal">(opcional)</span>
+              <label class="field-label" for="historico">
+                Histórico clínico relevante <span class="text-ink-400 font-normal">(opcional)</span>
               </label>
               <textarea id="historico" name="historico" rows="3"
                 placeholder="Ex.: Diabético tipo 2, hipertenso em uso de losartana. Tabagista 20 maços/ano."
-                class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 leading-relaxed shadow-soft transition-all hover:border-slate-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 resize-y min-h-[80px]"></textarea>
+                class="field-input leading-relaxed resize-y min-h-[80px] py-3"></textarea>
             </div>
           </div>
         </section>
       </div>
 
       <!-- Submit footer -->
-      <div class="border-t border-slate-100 bg-slate-50/50 px-7 md:px-8 py-4 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p class="text-[11px] text-slate-500 flex items-center gap-1.5">
-          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-accent-600"></i>
+      <div class="border-t border-ink-100 bg-ink-50/60 px-6 md:px-8 py-4 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p class="text-[11px] text-ink-500 flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-brand-500"></i>
           <span>Em modo Ollama, nenhum dado sai da sua máquina.</span>
         </p>
-        <button type="submit" id="submit-btn"
-          class="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-brand px-5 py-2.5 text-sm font-semibold text-white shadow-lifted transition-all hover:shadow-xl hover:-translate-y-px active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-brand-500/30 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
+        <button type="submit" id="submit-btn" class="btn btn-primary px-6 py-2.5 text-sm">
           <i data-lucide="stethoscope" class="w-4 h-4"></i>
           <span>Realizar triagem</span>
         </button>
@@ -404,73 +751,92 @@
     <aside class="lg:col-span-5 space-y-6">
 
       <!-- Result card -->
-      <div id="result-panel" class="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
+      <div id="result-panel" class="card overflow-hidden" aria-live="polite">
 
         <!-- Empty state -->
         <div id="empty-state" class="px-6 py-12 text-center">
-          <div class="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center mb-4 shadow-soft">
-            <i data-lucide="clipboard-check" class="w-6 h-6 text-slate-400"></i>
-          </div>
-          <h3 class="text-sm font-bold text-slate-900">Aguardando avaliação</h3>
-          <p class="text-xs text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">
-            Preencha o formulário ao lado e clique em <span class="font-semibold text-slate-700">Realizar triagem</span> para gerar a classificação de risco.
+          <svg viewBox="0 0 120 96" class="mx-auto h-24 w-auto mb-5" fill="none" aria-hidden="true">
+            <rect x="32" y="12" width="56" height="74" rx="8" stroke="#B3C0D1" stroke-width="2.5" fill="#fff"/>
+            <rect x="46" y="6" width="28" height="12" rx="4" fill="#DCE5EE" stroke="#B3C0D1" stroke-width="2"/>
+            <path d="M42 46h11l5-11 7 22 5-11h8" stroke="#476A8E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="42" y="62" width="36" height="4" rx="2" fill="#E8EDF3"/>
+            <rect x="42" y="72" width="24" height="4" rx="2" fill="#E8EDF3"/>
+          </svg>
+          <h3 class="font-display text-sm font-semibold text-ink-900">Pronto para a primeira avaliação</h3>
+          <p class="text-xs text-ink-500 mt-2 max-w-xs mx-auto leading-relaxed">
+            Preencha os dados do paciente e clique em <span class="font-semibold text-ink-700">Realizar triagem</span>. A classificação de risco aparece aqui.
           </p>
-          <div class="mt-5 inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-500">
+          <div class="mt-5 inline-flex items-center gap-1.5 rounded-full bg-ink-50 border border-ink-200 px-3 py-1.5 text-[10px] font-semibold text-ink-500">
             <i data-lucide="zap" class="w-3 h-3 text-amber-500"></i> Resposta típica em &lt; 1 segundo
           </div>
         </div>
 
-        <!-- Loading state -->
-        <div id="loading-state" class="hidden px-6 py-12 text-center">
-          <div class="mx-auto h-12 w-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center mb-4">
-            <div class="h-6 w-6 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin"></div>
+        <!-- Loading state: skeleton do resultado -->
+        <div id="loading-state" class="hidden" aria-busy="true">
+          <div class="p-6 space-y-4">
+            <div class="flex gap-4">
+              <span class="skel w-2.5 self-stretch rounded-full"></span>
+              <div class="flex-1 space-y-3 py-1">
+                <span class="skel block h-3 w-28"></span>
+                <span class="skel block h-9 w-40"></span>
+                <span class="skel block h-7 w-52"></span>
+              </div>
+            </div>
+            <div class="space-y-2.5 pt-2">
+              <span class="skel block h-3 w-full"></span>
+              <span class="skel block h-3 w-11/12"></span>
+              <span class="skel block h-3 w-4/6"></span>
+            </div>
+            <p class="text-xs text-ink-500 pt-1 flex items-center gap-2">
+              <span class="inline-block h-3.5 w-3.5 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin"></span>
+              <span id="loading-detail">Consultando o modelo…</span>
+            </p>
           </div>
-          <h3 class="text-sm font-bold text-slate-900">Avaliando paciente</h3>
-          <p id="loading-detail" class="text-xs text-slate-500 mt-2">Consultando o modelo…</p>
         </div>
 
         <!-- Error state -->
         <div id="error-state" class="hidden p-6">
-          <div class="flex items-start gap-3 rounded-xl bg-red-50 border border-red-100 p-4">
-            <div class="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
-              <i data-lucide="alert-triangle" class="w-4 h-4 text-red-600"></i>
+          <div class="flex items-start gap-3.5">
+            <div class="h-9 w-9 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="text-sm font-bold text-red-900">Erro na triagem</h3>
-              <p id="error-detail" class="text-xs text-red-700 mt-1 break-words leading-relaxed"></p>
+              <h3 class="font-display text-sm font-semibold text-ink-900">Não foi possível concluir a triagem</h3>
+              <p id="error-detail" class="text-xs text-ink-600 mt-1.5 break-words leading-relaxed"></p>
+              <button type="button" id="error-retry" class="btn btn-secondary mt-4 !py-2 text-xs">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Tentar novamente
+              </button>
             </div>
           </div>
         </div>
 
         <!-- Success state -->
         <div id="success-state" class="hidden">
-          <!-- Color band -->
-          <div id="result-band" class="px-6 py-5 reveal relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-white/0 via-white/0 to-white/15"></div>
-            <div class="relative flex items-start justify-between gap-4">
-              <div class="min-w-0">
-                <div class="text-[10px] font-bold uppercase tracking-widest opacity-90">Classificação de risco</div>
-                <div class="flex items-baseline gap-2.5 mt-1">
-                  <span id="result-label" class="text-3xl font-extrabold tracking-tight">—</span>
-                  <span id="result-time" class="text-xs font-semibold opacity-90">—</span>
-                </div>
-                <div id="result-description" class="text-xs font-medium opacity-90 mt-1.5"></div>
-              </div>
-              <div class="flex flex-col items-end gap-2 shrink-0">
-                <div id="result-icon" class="text-3xl leading-none"></div>
-                <span id="result-confidence" class="inline-flex items-center gap-1 rounded-full bg-white/20 backdrop-blur px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"></span>
-              </div>
+          <!-- Hero: a cor Manchester domina (banda lateral + fundo tonal) -->
+          <div id="result-band" class="result-hero reveal">
+            <div class="result-kicker">
+              <span>Classificação de risco</span>
+              <span id="result-icon" class="text-sm leading-none opacity-80" aria-hidden="true"></span>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap mt-2.5">
+              <span id="result-label" class="result-chip">—</span>
+              <span id="result-confidence" class="conf"></span>
+            </div>
+            <div class="mt-5">
+              <div class="result-time-label">Janela máxima de atendimento</div>
+              <div id="result-time" class="result-time">—</div>
+              <div id="result-description" class="result-desc"></div>
             </div>
           </div>
 
           <!-- Inconsistency banner (rule-based override) -->
-          <div id="inconsistency-banner" class="hidden mx-6 mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+          <div id="inconsistency-banner" class="hidden inc-banner">
             <div class="flex items-start gap-3">
               <div class="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                 <i data-lucide="shield-alert" class="w-4 h-4 text-amber-700"></i>
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-xs font-bold text-amber-900 uppercase tracking-wider">Classificação ajustada por regras determinísticas</h4>
+                <h4 class="text-xs font-bold text-amber-900 uppercase tracking-wider">Regras de segurança corrigiram o modelo</h4>
                 <p id="inconsistency-summary" class="text-xs text-amber-900 mt-1 leading-relaxed"></p>
                 <ul id="inconsistency-reasons" class="mt-2 space-y-1"></ul>
               </div>
@@ -480,17 +846,17 @@
           <!-- Justification + alerts -->
           <div class="p-6 space-y-5 reveal">
             <div>
-              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500 mb-2">
                 <i data-lucide="brain-circuit" class="w-3.5 h-3.5 text-brand-600"></i>
                 Justificativa clínica · XAI
               </div>
-              <div class="rounded-lg bg-slate-50 border border-slate-100 p-4">
-                <p id="result-justification" class="text-sm leading-relaxed text-slate-700"></p>
+              <div class="rounded-lg bg-ink-50 border border-ink-100 p-4 max-w-prose">
+                <p id="result-justification" class="text-sm leading-[1.7] text-ink-700"></p>
               </div>
             </div>
 
             <div id="alerts-section" class="hidden">
-              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500 mb-2">
                 <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-amber-600"></i>
                 Sinais de alerta
               </div>
@@ -498,14 +864,14 @@
             </div>
 
             <div id="questions-section" class="hidden">
-              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+              <div class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-ink-500 mb-2">
                 <i data-lucide="message-circle-question" class="w-3.5 h-3.5 text-brand-600"></i>
                 Perguntas adicionais sugeridas
               </div>
               <ul id="questions-list" class="space-y-1.5"></ul>
             </div>
 
-            <div class="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
+            <div class="pt-2 text-[11px] text-ink-400 flex items-center gap-1.5 font-mono">
               <i data-lucide="cpu" class="w-3 h-3"></i>
               <span id="result-backend">—</span>
             </div>
@@ -514,22 +880,27 @@
       </div>
 
       <!-- History -->
-      <div class="rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden">
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div class="card overflow-hidden">
+        <div class="px-5 py-3.5 border-b border-ink-100 flex items-center justify-between bg-ink-50/60">
           <div class="flex items-center gap-2">
-            <i data-lucide="history" class="w-4 h-4 text-slate-500"></i>
-            <h3 class="text-sm font-bold text-slate-900">Histórico da sessão</h3>
-            <span id="history-count" class="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-slate-200 px-1.5 text-[10px] font-bold text-slate-600">0</span>
+            <i data-lucide="history" class="w-4 h-4 text-ink-500"></i>
+            <h3 class="font-display text-sm font-semibold text-ink-900">Histórico da sessão</h3>
+            <span id="history-count" class="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-ink-100 px-1.5 text-[10px] font-bold text-ink-600 tabular">0</span>
           </div>
-          <button id="clear-history"
-            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+          <button id="clear-history" class="btn btn-ghost !px-2 !py-1 text-[11px]">
             <i data-lucide="trash-2" class="w-3 h-3"></i> Limpar
           </button>
         </div>
-        <div id="history-list" class="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+        <div id="history-list" class="divide-y divide-ink-100 max-h-[420px] overflow-y-auto">
           <div id="history-empty" class="px-5 py-8 text-center">
-            <i data-lucide="inbox" class="w-6 h-6 text-slate-300 mx-auto mb-2"></i>
-            <p class="text-xs text-slate-500">Nenhuma triagem realizada nesta sessão.</p>
+            <svg viewBox="0 0 96 56" class="mx-auto h-14 w-auto mb-3" fill="none" aria-hidden="true">
+              <rect x="14" y="8" width="68" height="12" rx="5" stroke="#D5DDE7" stroke-width="2" fill="#fff"/>
+              <rect x="14" y="26" width="68" height="12" rx="5" stroke="#E8EDF3" stroke-width="2" fill="#fff"/>
+              <rect x="14" y="44" width="68" height="6" rx="3" fill="#F4F7FA"/>
+              <rect x="19" y="11" width="4" height="6" rx="2" fill="#93AAC4"/>
+              <rect x="19" y="29" width="4" height="6" rx="2" fill="#D5DDE7"/>
+            </svg>
+            <p class="text-xs text-ink-500">Nenhuma triagem realizada nesta sessão.</p>
           </div>
         </div>
       </div>
@@ -537,83 +908,120 @@
   </main>
 
   <!-- ============================================================ -->
-  <!-- FILA VIVA                                                    -->
+  <!-- VIEW: FILA VIVA                                              -->
   <!-- ============================================================ -->
-  <section id="view-fila" class="hidden max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
-    <div class="flex items-center justify-between mb-6 gap-4">
+  <section id="view-fila" class="hidden max-w-6xl mx-auto px-5 md:px-8 py-7 flex-1 w-full">
+    <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
       <div>
-        <h2 class="text-2xl font-bold tracking-tight text-slate-900">Fila de atendimento</h2>
-        <p class="text-sm text-slate-600 mt-1">
-          Pacientes ordenados por gravidade Manchester. Cronômetro mostra o tempo restante até estourar a janela do protocolo.
+        <h2 class="font-display text-xl font-semibold tracking-tight text-ink-900">Fila de atendimento</h2>
+        <p class="text-[13px] text-ink-500 mt-1 max-w-xl">
+          Pacientes ordenados por gravidade Manchester. O cronômetro mostra o tempo restante da janela do protocolo.
         </p>
       </div>
       <div class="flex items-center gap-2 shrink-0 flex-wrap">
-        <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
-          <input id="fila-include-finalizados" type="checkbox" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500/30" />
+        <label class="inline-flex items-center gap-2 text-xs font-medium text-ink-600 cursor-pointer mr-1">
+          <input id="fila-include-finalizados" type="checkbox" class="rounded border-ink-300 text-brand-600 focus:ring-brand-500/30" />
           Incluir finalizados
         </label>
         <a href="/painel" target="_blank" rel="noopener"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-soft hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          class="btn btn-secondary !py-2 text-xs"
           title="Abrir painel público de chamada (modo TV)">
           <i data-lucide="monitor-play" class="w-3.5 h-3.5"></i>
           <span>Abrir painel</span>
         </a>
-        <button id="fila-refresh" type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-soft hover:bg-slate-50 hover:border-slate-300 transition-colors">
+        <button id="fila-refresh" type="button" class="btn btn-secondary !py-2 text-xs">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
           <span>Atualizar</span>
         </button>
-        <button id="fila-chamar-proximo" type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg bg-gradient-brand px-3.5 py-2 text-xs font-bold text-white shadow-lifted transition-all hover:-translate-y-px active:translate-y-0">
+        <button id="fila-chamar-proximo" type="button" class="btn btn-primary !py-2 text-xs">
           <i data-lucide="megaphone" class="w-3.5 h-3.5"></i>
           <span>Chamar próximo</span>
         </button>
       </div>
     </div>
 
-    <div id="fila-empty" class="hidden rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
-      <i data-lucide="inbox" class="w-8 h-8 text-slate-300 mx-auto mb-3"></i>
-      <h3 class="text-sm font-bold text-slate-900">Fila vazia</h3>
-      <p class="text-xs text-slate-500 mt-1">Nenhum paciente aguardando no momento.</p>
+    <div id="fila-empty" class="hidden card !border-dashed px-6 py-16 text-center">
+      <svg viewBox="0 0 140 96" class="mx-auto h-24 w-auto mb-4" fill="none" aria-hidden="true">
+        <rect x="20" y="14" width="100" height="20" rx="7" stroke="#B3C0D1" stroke-width="2" fill="#fff"/>
+        <rect x="20" y="42" width="100" height="20" rx="7" stroke="#D5DDE7" stroke-width="2" fill="#fff"/>
+        <rect x="20" y="70" width="100" height="20" rx="7" stroke="#E8EDF3" stroke-width="2" fill="#fff"/>
+        <rect x="26" y="19" width="5" height="10" rx="2.5" fill="#476A8E"/>
+        <rect x="26" y="47" width="5" height="10" rx="2.5" fill="#93AAC4"/>
+        <rect x="26" y="75" width="5" height="10" rx="2.5" fill="#D5DDE7"/>
+        <rect x="38" y="21" width="40" height="6" rx="3" fill="#E8EDF3"/>
+        <rect x="38" y="49" width="52" height="6" rx="3" fill="#E8EDF3"/>
+        <rect x="38" y="77" width="32" height="6" rx="3" fill="#F4F7FA"/>
+      </svg>
+      <h3 class="font-display text-sm font-semibold text-ink-900">Fila vazia</h3>
+      <p class="text-xs text-ink-500 mt-1.5">Nenhum paciente aguardando. As triagens concluídas entram aqui automaticamente.</p>
     </div>
 
-    <div id="fila-list" class="space-y-3"></div>
+    <div id="fila-list" class="space-y-3" aria-live="polite"></div>
   </section>
 
   <!-- ============================================================ -->
   <!-- FOOTER                                                       -->
   <!-- ============================================================ -->
-  <footer class="border-t border-slate-200 bg-white">
-    <div class="max-w-7xl mx-auto px-6 py-5 flex flex-col gap-3">
+  <footer class="border-t border-ink-200 bg-white mt-auto">
+    <div class="max-w-6xl mx-auto px-5 md:px-8 py-5 flex flex-col gap-3">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Manchester:</span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#FF4444] ring-2 ring-red-100"></span> Vermelho · imediato
+        <span class="text-[10px] font-bold uppercase tracking-widest text-ink-400">Manchester</span>
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+          <span class="h-2.5 w-2.5 rounded-full" style="background: var(--mcs-vermelho)"></span> Vermelho · imediato
         </span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#FF8C00] ring-2 ring-orange-100"></span> Laranja · 10 min
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+          <span class="h-2.5 w-2.5 rounded-full" style="background: var(--mcs-laranja)"></span> Laranja · 10 min
         </span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#FFD700] ring-2 ring-yellow-100"></span> Amarelo · 60 min
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+          <span class="h-2.5 w-2.5 rounded-full" style="background: var(--mcs-amarelo)"></span> Amarelo · 60 min
         </span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#28A745] ring-2 ring-green-100"></span> Verde · 120 min
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+          <span class="h-2.5 w-2.5 rounded-full" style="background: var(--mcs-verde)"></span> Verde · 120 min
         </span>
-        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span class="h-2.5 w-2.5 rounded-full bg-[#17A2B8] ring-2 ring-cyan-100"></span> Azul · 240 min
+        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-ink-600">
+          <span class="h-2.5 w-2.5 rounded-full" style="background: var(--mcs-azul)"></span> Azul · 240 min
         </span>
       </div>
-      <p class="text-[11px] text-slate-500 leading-relaxed">
+      <p class="text-[11px] text-ink-500 leading-relaxed">
         Prova de conceito acadêmica · Disciplina Tópicos Especiais em Computação II · URI ·
-        <span class="text-slate-400">Não substitui avaliação médica profissional. Toda decisão final é de responsabilidade da equipe clínica.</span>
+        <span class="text-ink-400">Não substitui avaliação médica profissional. Toda decisão final é de responsabilidade da equipe clínica.</span>
       </p>
     </div>
   </footer>
+  </div><!-- /.app-main -->
 
   <!-- ============================================================ -->
   <!-- JAVASCRIPT                                                   -->
   <!-- ============================================================ -->
   <script>
+  /* ==========================================================================
+     INVENTÁRIO JS ↔ DOM (contrato de preservação do redesign)
+     IDs lidos/escritos pelo JS:
+       form:    triagem-form, submit-btn, enfermeiro, paciente_nome, idade,
+                sexo, pressao, frequencia_cardiaca, spo2, temperatura,
+                sintomas, historico, sintomas-counter
+       ditado:  dictation-btn, dictation-status, dictation-help,
+                dictation-vu, dictation-vu-wrap
+       shell:   view-tabs, view-triagem, view-fila, fila-badge, status-pill,
+                status-dot, status-ping, status-text, backend-btn,
+                backend-menu, backend-label, model-label, model-select
+       result:  result-panel, empty-state, loading-state, loading-detail,
+                error-state, error-detail, error-retry, success-state,
+                result-band, result-label, result-icon, result-time,
+                result-description, result-confidence, result-backend,
+                result-justification, inconsistency-banner,
+                inconsistency-summary, inconsistency-reasons,
+                alerts-section, alerts-list, questions-section, questions-list
+       fila:    fila-list, fila-empty, fila-refresh, fila-chamar-proximo,
+                fila-include-finalizados
+       hist.:   history-list, history-empty, history-count, clear-history
+     Classes/atributos acoplados:
+       .view-tab[data-view] (+ .is-active), .backend-opt[data-backend],
+       [data-case], button[data-action][data-id],
+       .timer[data-criado][data-tempo-max][data-status] (+ is-warn/is-late/is-done),
+       .history-item, .vital-field (+ is-warn/is-crit) > .vital-hint,
+       #dictation-btn.is-recording/.is-transcribing, .hidden (toggle), data-lucide
+     ========================================================================== */
   const state = {
     backend: 'Groq',
     modelo: null,
@@ -673,6 +1081,7 @@
     $('#sintomas').value = c.sintomas;
     $('#historico').value = c.historico;
     updateCounter();
+    validateAllVitals();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -731,6 +1140,12 @@
     document.addEventListener('click', (e) => {
       if (!menu.contains(e.target) && !btn.contains(e.target)) menu.classList.add('hidden');
     });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !menu.classList.contains('hidden')) {
+        menu.classList.add('hidden');
+        btn.focus();
+      }
+    });
     menu.querySelectorAll('.backend-opt').forEach((b) => {
       b.addEventListener('click', () => {
         state.backend = b.dataset.backend;
@@ -778,17 +1193,30 @@
 
   function renderResult(data) {
     const cor = data.cor_info || {};
+    // A cor Manchester domina o hero: banda lateral + fundo tonal,
+    // via CSS custom properties consumidas por .result-hero.
     const band = $('#result-band');
-    band.style.backgroundColor = cor.hex_fundo || '#64748b';
-    band.style.color = cor.hex_texto || '#fff';
+    band.style.setProperty('--mcs', cor.hex_fundo || '#64748b');
+    band.style.setProperty('--mcs-ink', cor.hex_texto || '#ffffff');
 
     $('#result-label').textContent = data.classificacao || '—';
     $('#result-icon').textContent  = cor.icone || '';
     $('#result-time').textContent  = (cor.tempo_max != null && cor.tempo_max >= 0)
-      ? `· até ${cor.tempo_max} min`
-      : '';
+      ? (cor.tempo_max === 0 ? 'Imediato' : `até ${cor.tempo_max} min`)
+      : '—';
     $('#result-description').textContent = cor.descricao || '';
-    $('#result-confidence').textContent  = `Confiança: ${data.confianca || '—'}`;
+
+    // Confiança como indicador visual de 3 níveis
+    const confTxt = data.confianca || '—';
+    const confKey = confTxt.toLowerCase();
+    const nivel = confKey.startsWith('alta') ? 3
+                : (confKey.startsWith('m') ? 2
+                : (confKey.startsWith('baixa') ? 1 : 0));
+    $('#result-confidence').innerHTML =
+      `<span class="conf-meter" aria-hidden="true">` +
+      [1, 2, 3].map((i) => `<i class="${i <= nivel ? 'on' : ''}"></i>`).join('') +
+      `</span><span>Confiança ${escapeHtml(confTxt)}</span>`;
+
     $('#result-backend').textContent     = data.backend_usado || '';
     $('#result-justification').textContent = data.justificativa || '';
 
@@ -804,8 +1232,8 @@
         `${data.cor_regra} com base nos sinais vitais informados:`;
       (data.motivos_regra || []).forEach((m) => {
         const li = document.createElement('li');
-        li.className = 'text-xs text-amber-900 flex items-start gap-1.5';
-        li.innerHTML = `<i data-lucide="dot" class="w-3 h-3 mt-0.5 text-amber-700 shrink-0"></i><span>${escapeHtml(m)}</span>`;
+        li.className = 'inc-reason';
+        li.innerHTML = `<span>${escapeHtml(m)}</span>`;
         incReasons.appendChild(li);
       });
       incBanner.classList.remove('hidden');
@@ -819,8 +1247,8 @@
       alertsBox.classList.remove('hidden');
       data.sinais_alerta.forEach((s) => {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2.5 rounded-lg bg-amber-50/60 border border-amber-100 px-3 py-2 text-sm text-amber-900';
-        li.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 mt-0.5 text-amber-600 shrink-0"></i><span>${escapeHtml(s)}</span>`;
+        li.className = 'alert-item';
+        li.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span>${escapeHtml(s)}</span>`;
         alertsList.appendChild(li);
       });
     } else {
@@ -833,8 +1261,8 @@
       qBox.classList.remove('hidden');
       data.perguntas_adicionais.forEach((q) => {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2.5 rounded-lg bg-brand-50/60 border border-brand-100 px-3 py-2 text-sm text-brand-900';
-        li.innerHTML = `<i data-lucide="help-circle" class="w-3.5 h-3.5 mt-0.5 text-brand-600 shrink-0"></i><span>${escapeHtml(q)}</span>`;
+        li.className = 'question-item';
+        li.innerHTML = `<i data-lucide="help-circle" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span>${escapeHtml(q)}</span>`;
         qList.appendChild(li);
       });
     } else {
@@ -863,23 +1291,19 @@
 
     [...list].reverse().forEach((entry) => {
       const item = document.createElement('div');
-      item.className = 'history-item px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors';
+      item.className = 'history-item';
       const cor = entry.cor_info || {};
       const time = (entry.timestamp || '').split('T')[1]?.slice(0, 5) || '';
       item.innerHTML = `
-        <span class="h-9 w-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 shadow-soft"
-              style="background-color: ${cor.hex_fundo || '#94a3b8'}; color: ${cor.hex_texto || '#fff'};">
-          ${cor.icone || ''}
-        </span>
+        <span class="hist-swatch" style="background-color: ${cor.hex_fundo || '#94a3b8'};" title="${escapeHtml(entry.classificacao || '')}"></span>
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-900">${escapeHtml(entry.classificacao || '—')}</span>
-            <span class="text-[10px] text-slate-300">·</span>
-            <span class="text-[11px] text-slate-500 font-medium">${escapeHtml(entry.idade || '?')}a, ${escapeHtml(entry.sexo || '—')}</span>
+          <div class="flex items-baseline gap-2">
+            <span class="font-display text-xs font-semibold text-ink-900">${escapeHtml(entry.classificacao || '—')}</span>
+            <span class="text-[11px] text-ink-500 font-medium">${escapeHtml(entry.idade || '?')} anos · ${escapeHtml(entry.sexo || '—')}</span>
           </div>
-          <div class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml((entry.sintomas || '').slice(0, 80))}</div>
+          <div class="text-[11px] text-ink-500 truncate mt-0.5">${escapeHtml((entry.sintomas || '').slice(0, 80))}</div>
         </div>
-        <span class="text-[10px] text-slate-400 shrink-0 font-medium tabular-nums">${time}</span>
+        <span class="text-[10px] text-ink-400 shrink-0 font-mono tabular-nums">${time}</span>
       `;
       wrap.appendChild(item);
     });
@@ -961,6 +1385,48 @@
   }
 
   // -------------------------------------------------------------------------
+  // VALIDAÇÃO VISUAL DOS SINAIS VITAIS
+  // Espelha os LIMIARES_CRITICOS do backend (protocols.py) apenas para
+  // feedback visual em tempo real. A trava real continua no servidor —
+  // nada aqui altera o payload nem a submissão.
+  // -------------------------------------------------------------------------
+  const VITAIS_UI = {
+    spo2: (v) => v < 90 ? ['crit', 'Abaixo de 90% — limiar de emergência'] : null,
+    frequencia_cardiaca: (v) =>
+      v > 140 ? ['warn', 'Acima de 140 bpm — taquicardia importante'] :
+      v < 40  ? ['warn', 'Abaixo de 40 bpm — bradicardia importante'] : null,
+    temperatura: (v) =>
+      v > 39.5 ? ['warn', 'Acima de 39,5 °C — febre muito alta'] :
+      v < 35   ? ['warn', 'Abaixo de 35 °C — hipotermia'] : null,
+    pressao: (v) => {
+      const sis = parseInt(String(v).split(/[\/xX]/)[0], 10);
+      if (!Number.isFinite(sis)) return null;
+      if (sis < 90)  return ['crit', 'Sistólica abaixo de 90 — risco de choque'];
+      if (sis > 220) return ['warn', 'Sistólica acima de 220 — crise hipertensiva'];
+      return null;
+    },
+  };
+
+  function validateVital(id) {
+    const field = document.getElementById(id);
+    const wrap = field && field.closest('.vital-field');
+    if (!field || !wrap) return;
+    const hint = wrap.querySelector('.vital-hint');
+    const raw = field.value;
+    const val = id === 'pressao' ? raw : parseFloat(raw);
+    const res = (raw !== '' && !(typeof val === 'number' && Number.isNaN(val)))
+      ? VITAIS_UI[id](val)
+      : null;
+    wrap.classList.toggle('is-crit', !!res && res[0] === 'crit');
+    wrap.classList.toggle('is-warn', !!res && res[0] === 'warn');
+    if (hint) hint.textContent = res ? res[1] : '';
+  }
+
+  function validateAllVitals() {
+    Object.keys(VITAIS_UI).forEach(validateVital);
+  }
+
+  // -------------------------------------------------------------------------
   // FILA VIVA
   // -------------------------------------------------------------------------
   let filaTimer = null;        // setInterval que atualiza os cronômetros (1s)
@@ -970,11 +1436,7 @@
   function setActiveTab(view) {
     currentView = view;
     document.querySelectorAll('.view-tab').forEach((b) => {
-      const active = b.dataset.view === view;
-      b.classList.toggle('bg-brand-50', active);
-      b.classList.toggle('text-brand-700', active);
-      b.classList.toggle('text-slate-500', !active && b.dataset.view === 'fila');
-      b.classList.toggle('text-slate-700', !active && b.dataset.view === 'triagem');
+      b.classList.toggle('is-active', b.dataset.view === view);
     });
     $('#view-triagem').classList.toggle('hidden', view !== 'triagem');
     $('#view-fila').classList.toggle('hidden', view !== 'fila');
@@ -1052,113 +1514,103 @@
       const cor = item.cor_info || {};
       const isFinalizado = item.status !== 'aguardando';
       const statusBadge = {
-        aguardando: '<span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Aguardando</span>',
-        atendido:   '<span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Atendido</span>',
-        dispensado: '<span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Dispensado</span>',
+        aguardando: '<span class="tag tag-wait">Aguardando</span>',
+        atendido:   '<span class="tag tag-done">Atendido</span>',
+        dispensado: '<span class="tag tag-off">Dispensado</span>',
       }[item.status] || '';
 
       const incTag = item.inconsistencia
-        ? `<span class="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+        ? `<span class="tag tag-trava">
              <i data-lucide="shield-alert" class="w-3 h-3"></i> Trava
            </span>`
         : '';
 
       const chamadoTag = item.chamado_em
-        ? `<span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+        ? `<span class="tag tag-called">
              <i data-lucide="megaphone" class="w-3 h-3"></i> Chamado ${escapeHtml(formatRelativeTime(item.chamado_em))}
            </span>`
         : '';
 
       const btnChamar = item.chamado_em
-        ? `<button data-action="chamar" data-id="${item.id}"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 px-3 py-1.5 text-xs font-semibold hover:bg-indigo-100 transition-colors">
+        ? `<button data-action="chamar" data-id="${item.id}" class="btn btn-secondary !px-3 !py-1.5 text-xs">
             <i data-lucide="megaphone" class="w-3.5 h-3.5"></i> Chamar de novo
           </button>`
-        : `<button data-action="chamar" data-id="${item.id}"
-            class="inline-flex items-center gap-1.5 rounded-lg bg-gradient-brand text-white px-3 py-1.5 text-xs font-bold shadow-soft hover:shadow-md transition-all">
+        : `<button data-action="chamar" data-id="${item.id}" class="btn btn-primary !px-3 !py-1.5 text-xs">
             <i data-lucide="megaphone" class="w-3.5 h-3.5"></i> Chamar paciente
           </button>`;
 
       const acoes = isFinalizado ? '' : `
         <div class="flex flex-wrap gap-2">
           ${btnChamar}
-          <button data-action="atendido" data-id="${item.id}"
-            class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-emerald-700 transition-colors">
-            <i data-lucide="check" class="w-3.5 h-3.5"></i> Marcar atendido
+          <button data-action="atendido" data-id="${item.id}" class="btn btn-secondary !px-3 !py-1.5 text-xs">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i> Atendido
           </button>
-          <button data-action="dispensado" data-id="${item.id}"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 transition-colors">
+          <button data-action="dispensado" data-id="${item.id}" class="btn btn-ghost !px-3 !py-1.5 text-xs">
             <i data-lucide="x" class="w-3.5 h-3.5"></i> Dispensar
           </button>
         </div>
       `;
 
       const card = document.createElement('article');
-      card.className = 'rounded-2xl border border-slate-200 bg-white shadow-card overflow-hidden';
+      card.className = 'card overflow-hidden';
       card.innerHTML = `
         <div class="flex">
-          <div class="w-2 shrink-0" style="background-color: ${cor.hex_fundo || '#94a3b8'};"></div>
-          <div class="flex-1 p-5">
+          <div class="fila-band" style="background-color: ${cor.hex_fundo || '#94a3b8'};"></div>
+          <div class="flex-1 p-5 min-w-0">
             <div class="flex items-start justify-between gap-4 flex-wrap">
-              <div class="flex items-center gap-3 min-w-0">
-                <span class="h-10 w-10 rounded-lg flex items-center justify-center text-base font-bold shrink-0 shadow-soft"
-                      style="background-color: ${cor.hex_fundo || '#94a3b8'}; color: ${cor.hex_texto || '#fff'};">
-                  ${cor.icone || ''}
-                </span>
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-sm font-bold text-slate-900">${escapeHtml(item.paciente_nome || ('Paciente #' + item.id))}</span>
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${escapeHtml(item.classificacao || '—')}</span>
-                    ${statusBadge}
-                    ${incTag}
-                    ${chamadoTag}
-                  </div>
-                  <div class="text-[11px] text-slate-500 font-medium mt-0.5">
-                    ${escapeHtml(String(item.idade ?? '?'))}a · ${escapeHtml(item.sexo || '—')} · #${item.id}
-                    · <span title="${escapeHtml(item.criado_em)}">${escapeHtml(formatRelativeTime(item.criado_em))}</span>
-                  </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="fila-classe" style="background-color: ${cor.hex_fundo || '#94a3b8'}; color: ${cor.hex_texto || '#fff'};">${escapeHtml(item.classificacao || '—')}</span>
+                  <span class="fila-nome">${escapeHtml(item.paciente_nome || ('Paciente #' + item.id))}</span>
+                  ${statusBadge}
+                  ${incTag}
+                  ${chamadoTag}
+                </div>
+                <div class="fila-meta">
+                  ${escapeHtml(String(item.idade ?? '?'))} anos · ${escapeHtml(item.sexo || '—')} · #${item.id}
+                  · <span title="${escapeHtml(item.criado_em)}">${escapeHtml(formatRelativeTime(item.criado_em))}</span>
                 </div>
               </div>
               <div class="text-right shrink-0">
-                <div class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tempo restante</div>
-                <div class="timer text-base font-bold tabular-nums" data-criado="${item.criado_em}" data-tempo-max="${item.tempo_max_min}" data-status="${item.status}">—</div>
+                <div class="fila-timer-label">Tempo restante</div>
+                <div class="timer" data-criado="${item.criado_em}" data-tempo-max="${item.tempo_max_min}" data-status="${item.status}">—</div>
               </div>
             </div>
 
-            <p class="text-sm text-slate-700 mt-3 leading-relaxed">
-              <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Sintomas</span>
+            <p class="text-sm text-ink-700 mt-3.5 leading-relaxed max-w-prose">
+              <span class="text-[9px] font-bold uppercase tracking-[0.14em] text-ink-400 block mb-1">Sintomas</span>
               ${escapeHtml((item.sintomas || '').slice(0, 240))}${(item.sintomas || '').length > 240 ? '…' : ''}
             </p>
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-[11px]">
-              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
-                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">PA</div>
-                <div class="font-medium text-slate-700">${escapeHtml(item.pressao || '—')}</div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3.5">
+              <div class="vital-chip">
+                <div class="k">PA</div>
+                <div class="v">${escapeHtml(item.pressao || '—')} <span class="text-ink-400">mmHg</span></div>
               </div>
-              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
-                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">FC</div>
-                <div class="font-medium text-slate-700">${item.frequencia_cardiaca ?? '—'} bpm</div>
+              <div class="vital-chip">
+                <div class="k">FC</div>
+                <div class="v">${item.frequencia_cardiaca ?? '—'} <span class="text-ink-400">bpm</span></div>
               </div>
-              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
-                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">SpO₂</div>
-                <div class="font-medium text-slate-700">${item.spo2 ?? '—'}%</div>
+              <div class="vital-chip">
+                <div class="k">SpO₂</div>
+                <div class="v">${item.spo2 ?? '—'} <span class="text-ink-400">%</span></div>
               </div>
-              <div class="rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5">
-                <div class="text-slate-400 font-semibold uppercase tracking-wider text-[9px]">Temp</div>
-                <div class="font-medium text-slate-700">${item.temperatura ?? '—'} °C</div>
+              <div class="vital-chip">
+                <div class="k">Temp</div>
+                <div class="v">${item.temperatura ?? '—'} <span class="text-ink-400">°C</span></div>
               </div>
             </div>
 
-            <div class="mt-3 text-[11px] text-slate-500">
-              <span class="font-semibold text-slate-600">Enfermeiro:</span> ${escapeHtml(item.enfermeiro || '—')}
+            <div class="mt-3 text-[11px] text-ink-500">
+              <span class="font-semibold text-ink-600">Enfermeiro:</span> ${escapeHtml(item.enfermeiro || '—')}
             </div>
 
             ${item.justificativa ? `
-              <details class="mt-3 group">
-                <summary class="cursor-pointer text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-brand-600 transition-colors flex items-center gap-1">
-                  <i data-lucide="brain-circuit" class="w-3 h-3"></i> Ver justificativa
+              <details class="mt-3">
+                <summary class="cursor-pointer text-[11px] font-bold uppercase tracking-[0.14em] text-ink-500 hover:text-brand-600 transition-colors inline-flex items-center gap-1.5">
+                  <i data-lucide="chevron-right" class="w-3 h-3 chev"></i> Justificativa do modelo
                 </summary>
-                <p class="mt-2 text-sm text-slate-700 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg p-3">
+                <p class="details-body mt-2 text-sm text-ink-700 leading-relaxed bg-ink-50 border border-ink-100 rounded-lg p-3 max-w-prose">
                   ${escapeHtml(item.justificativa)}
                 </p>
               </details>` : ''}
@@ -1200,7 +1652,7 @@
       const status = el.dataset.status;
       if (status !== 'aguardando') {
         el.textContent = '—';
-        el.className = 'timer text-base font-bold tabular-nums text-slate-400';
+        el.className = 'timer is-done';
         return;
       }
       const criado = new Date(el.dataset.criado).getTime();
@@ -1214,14 +1666,15 @@
 
       if (restanteSeg <= 0) {
         const atrasoMin = Math.ceil(-restanteSeg / 60);
-        el.textContent = `+${atrasoMin}m atrasado`;
-        el.className = 'timer text-base font-bold tabular-nums text-red-600 animate-pulse';
+        el.textContent = `+${atrasoMin} min`;
+        el.className = 'timer is-late';
       } else {
         const m = Math.floor(restanteSeg / 60);
         const s = restanteSeg % 60;
         el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        const tight = restanteSeg < 60;
-        el.className = `timer text-base font-bold tabular-nums ${tight ? 'text-amber-600' : 'text-slate-700'}`;
+        // Âmbar quando resta menos de 25% da janela do protocolo
+        const tight = restanteSeg < tempoMax * 60 * 0.25;
+        el.className = `timer${tight ? ' is-warn' : ''}`;
       }
     });
   }
@@ -1454,7 +1907,7 @@
 
     // 4. UI ativa (gravando)
     const btn = $('#dictation-btn');
-    btn.classList.add('!border-rose-500', '!text-rose-600', '!bg-rose-50');
+    btn.classList.add('is-recording');
     setBtnIcon(btn, 'square');  // ícone de "stop"
     setDictationStatus('recording');
     setHelp('Gravando… Fale claramente. Clique no botão para parar e transcrever.');
@@ -1469,8 +1922,8 @@
     // de transcreverEEnviar (sucesso ou erro).
     const btn = $('#dictation-btn');
     btn.disabled = true;
-    btn.classList.remove('!border-rose-500', '!text-rose-600', '!bg-rose-50');
-    btn.classList.add('!border-brand-500', '!bg-brand-50');
+    btn.classList.remove('is-recording');
+    btn.classList.add('is-transcribing');
     setBtnSpinner(btn);
     setDictationStatus('transcribing');
     setHelp('Transcrevendo via Whisper… (pode levar alguns segundos)');
@@ -1487,8 +1940,7 @@
   function finalizarUiDitado() {
     const btn = $('#dictation-btn');
     btn.disabled = false;
-    btn.classList.remove('!border-rose-500', '!text-rose-600', '!bg-rose-50',
-                          '!border-brand-500', '!bg-brand-50');
+    btn.classList.remove('is-recording', 'is-transcribing');
     setBtnIcon(btn, 'mic');
     setDictationStatus(null);
   }
@@ -1543,6 +1995,17 @@
     if (enfermeiroSalvo) $('#enfermeiro').value = enfermeiroSalvo;
 
     $('#sintomas').addEventListener('input', updateCounter);
+
+    // Validação visual dos sinais vitais (feedback de limiar crítico)
+    Object.keys(VITAIS_UI).forEach((id) => {
+      document.getElementById(id)?.addEventListener('input', () => validateVital(id));
+    });
+    validateAllVitals();
+
+    // Botão "Tentar novamente" do estado de erro: reenvia o formulário
+    $('#error-retry')?.addEventListener('click', () => {
+      $('#triagem-form').requestSubmit();
+    });
 
     setupDictation();
 
